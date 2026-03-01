@@ -16,16 +16,15 @@ import About from "./pages/About";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
-import annyangStatic from 'annyang';
-
-const annyang = annyangStatic as any;
+import annyang from 'annyang';
 
 const GlobalVoiceController = () => {
   const navigate = useNavigate();
   const { isVoiceMode, speak, readPageContent } = useVoice();
 
   useEffect(() => {
-    if (isVoiceMode && annyang) {
+    const annyangLib = annyang as any;
+    if (isVoiceMode && annyangLib) {
       // Define the voice navigation commands
       const commands = {
         'go back': () => { speak('Going back'); navigate(-1); },
@@ -38,23 +37,24 @@ const GlobalVoiceController = () => {
         'go to profile': () => { speak('Navigating to profile'); navigate('/profile'); },
         'go to login': () => { speak('Navigating to authentication page'); navigate('/auth'); },
         'sign in': () => { speak('Navigating to sign in'); navigate('/auth'); },
+        'log in': () => { speak('Navigating to sign in'); navigate('/auth'); },
+        'sign up': () => { speak('Navigating to sign up'); navigate('/auth'); },
+        'register': () => { speak('Navigating to sign up'); navigate('/auth'); },
+        'create account': () => { speak('Navigating to sign up'); navigate('/auth'); },
         'read this page': () => { readPageContent(); },
         'read page': () => { readPageContent(); },
         'stop speaking': () => { window.speechSynthesis.cancel(); }
       };
 
       // Add commands to annyang
-      annyang.addCommands(commands);
-    } else if (annyang) {
-      // Remove commands if voice mode is off
-      annyang.removeCommands();
-    }
+      annyangLib.addCommands(commands);
 
-    return () => {
-      if (annyang) {
-        annyang.removeCommands();
-      }
-    };
+      return () => {
+        if (annyangLib) {
+          annyangLib.removeCommands(Object.keys(commands));
+        }
+      };
+    }
   }, [isVoiceMode, navigate, speak, readPageContent]);
 
   return (

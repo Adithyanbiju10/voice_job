@@ -105,7 +105,12 @@
     font-family: var(--font-body);
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-heading);
   }
 }
@@ -116,11 +121,54 @@
   }
 
   @keyframes voicePulse {
-    0%, 100% {
-      box-shadow: 0 0 0 0 hsl(174 62% 38% / 0.4);
+
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 hsla(var(--primary), 0.4);
     }
+
     50% {
-      box-shadow: 0 0 0 20px hsl(174 62% 38% / 0);
+      box-shadow: 0 0 0 20px hsla(var(--primary), 0);
+    }
+  }
+
+  @keyframes voice-bar {
+
+    0%,
+    100% {
+      height: 30%;
+    }
+
+    50% {
+      height: 100%;
+    }
+  }
+
+  .animate-voice-bar-1 {
+    animation: voice-bar 0.6s ease-in-out infinite;
+  }
+
+  .animate-voice-bar-2 {
+    animation: voice-bar 0.6s ease-in-out infinite 0.1s;
+  }
+
+  .animate-voice-bar-3 {
+    animation: voice-bar 0.6s ease-in-out infinite 0.2s;
+  }
+
+  .voice-focus-pulse {
+    animation: focusPulse 0.5s ease-out;
+  }
+
+  @keyframes focusPulse {
+    0% {
+      outline: 4px solid hsla(var(--primary), 0.5);
+      outline-offset: 2px;
+    }
+
+    100% {
+      outline: 0px solid hsla(var(--primary), 0);
+      outline-offset: 0px;
     }
   }
 }

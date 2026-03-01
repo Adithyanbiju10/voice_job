@@ -11,7 +11,17 @@ const features = [
   { icon: Shield, title: 'Safe & Inclusive', desc: 'Every employer is vetted for inclusive workplace practices.', iconColor: 'text-primary', bgColor: 'bg-primary/10' },
 ];
 
+import { useAuth } from '@/contexts/AuthContext';
+
 const Index = () => {
+  const { isVoiceMode, speak } = useVoice();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (isVoiceMode && !user) {
+      speak("Welcome to Ability Jobs. You are currently not signed in. You can say 'go to login' to sign in or create an account.");
+    }
+  }, [isVoiceMode, user]);
 
   return (
     <main>

@@ -1,22 +1,26 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, MapPin, Clock, DollarSign, Accessibility, Briefcase, Loader2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, IndianRupee, Accessibility, Briefcase, Loader2 } from 'lucide-react';
 import ApplyDialog from '@/components/ApplyDialog';
 import { useVoice } from '@/contexts/VoiceContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { MOCK_JOBS } from '@/data/mockJobs';
 import { getLocalJobs } from '@/utils/localJobs';
 import type { Tables } from '@/integrations/supabase/types';
+import annyang from 'annyang';
 
 const JobDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [job, setJob] = useState<Tables<'jobs'> | null>(null);
   const [loading, setLoading] = useState(true);
   const [applyOpen, setApplyOpen] = useState(false);
   const { isVoiceMode, speak, listen } = useVoice();
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetch = async () => {
@@ -48,15 +52,59 @@ const JobDetail = () => {
 
   useEffect(() => {
     if (isVoiceMode && job) {
-      speak(`Job: ${job.title} at ${job.company}. Location: ${job.location}. ${job.salary_range || ''}. Say "apply" to apply for this job, or "back" to go back.`).then(async () => {
-        const response = await listen();
-        if (response.toLowerCase().includes('apply')) {
+      let applyPrompt = ' Say "back" to go back.';
+      if (user?.role === 'seeker') {
+        applyPrompt = ' Say "apply now" or "apply" to apply for this job, or "back" to go back.';
+      } else if (!user) {
+        applyPrompt = ' You can say "apply now" to sign in and apply for this job, or "back" to go back.';
+      }
+
+      const fullDescription = `
+        Job details for ${job.title} at ${job.company}.
+        Location: ${job.location}.
+        Salary: ${job.salary_range || 'Not specified'}.
+        Description: ${job.description}.
+        Requirements: ${job.requirements?.join(', ') || 'No specific requirements listed'}.
+        Accessibility Features: ${job.accessibility_features?.join(', ') || 'Standard accessibility'}.
+        ${applyPrompt}
+      `;
+
+      speak(fullDescription);
+
+      const handleApply = () => {
+        if (!user) {
+          speak('You need to sign in to apply. Opening the sign-in prompt.');
           setApplyOpen(true);
-          await speak('Opening application form.');
+        } else if (user.role === 'seeker') {
+          speak('Opening application form.');
+          setApplyOpen(true);
+        } else {
+          speak('Only job seekers can apply for jobs.');
         }
-      });
+      };
+
+      const commands = {
+        'apply': handleApply,
+        'apply now': handleApply,
+        'back': () => {
+          speak('Going back to jobs list.');
+          navigate('/jobs');
+        },
+        'go to home': () => {
+          speak('Navigating to home page.');
+          navigate('/');
+        }
+      };
+
+      const annyangLib = annyang as any;
+      if (annyangLib) {
+        annyangLib.addCommands(commands);
+        return () => {
+          annyangLib.removeCommands(Object.keys(commands));
+        };
+      }
     }
-  }, [isVoiceMode, job]);
+  }, [isVoiceMode, job, user, navigate]);
 
   if (loading) {
     return (
@@ -94,13 +142,21 @@ const JobDetail = () => {
 
       <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-8">
         <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4 text-primary/70" />{job.location}</span>
-        {job.salary_range && <span className="flex items-center gap-1.5"><DollarSign className="h-4 w-4 text-success/70" />{job.salary_range}</span>}
+        {job.salary_range && <span className="flex items-center gap-1.5"><IndianRupee className="h-4 w-4 text-success/70" />{job.salary_range}</span>}
         <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-accent/70" />{new Date(job.posted_at).toLocaleDateString()}</span>
       </div>
 
-      <Button size="lg" className="mb-8 w-full sm:w-auto text-base px-8 shadow-lg shadow-primary/20" onClick={() => setApplyOpen(true)}>
-        <Briefcase className="mr-2 h-4 w-4" /> Apply Now
-      </Button>
+      {(!user || user.role === 'seeker') && (
+        <Button size="lg" className="mb-8 w-full sm:w-auto text-base px-8 shadow-lg shadow-primary/20" onClick={() => setApplyOpen(true)}>
+          <Briefcase className="mr-2 h-4 w-4" /> Apply Now
+        </Button>
+      )}
+
+      {user?.role === 'employer' && (
+        <div className="mb-8 p-4 bg-muted/30 border border-border rounded-lg text-sm text-center">
+          <p>You are viewing this job as an employer. Only job seekers can apply for jobs.</p>
+        </div>
+      )}
 
       <Card className="mb-6">
         <CardContent className="p-6">
@@ -142,7 +198,7 @@ const JobDetail = () => {
         </Card>
       )}
 
-      <ApplyDialog open={applyOpen} onOpenChange={setApplyOpen} jobId={job.id} jobTitle={job.title} />
+      <ApplyDialog open={applyOpen} onOpenChange={setApplyOpen} jobId={job.id} jobTitle={job.title} employerName={job.company} />
     </main>
   );
 };

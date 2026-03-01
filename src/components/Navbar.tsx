@@ -1,11 +1,12 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Briefcase, Home, Info, Mic, MicOff, Moon, Sun, Menu, X } from 'lucide-react';
 import { useVoice } from '@/contexts/VoiceContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { User } from 'lucide-react';
+import annyang from 'annyang';
 
 const navLinks = [
   { to: '/', label: 'Home', icon: Home },
@@ -15,6 +16,7 @@ const navLinks = [
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { isVoiceMode, setIsVoiceMode, speak, isListening, isSpeaking } = useVoice();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -27,6 +29,40 @@ const Navbar = () => {
       await speak('Voice mode activated');
     }
   };
+
+  useEffect(() => {
+    if (isVoiceMode) {
+      const commands = {
+        'go to profile': () => {
+          if (user) {
+            speak('Navigating to your profile.');
+            navigate('/profile');
+          } else {
+            speak('Please sign in first to view your profile.');
+            navigate('/auth');
+          }
+        },
+        'go to home': () => {
+          speak('Returning home.');
+          navigate('/');
+        },
+        'home': () => {
+          speak('Returning home.');
+          navigate('/');
+        },
+        'jobs': () => {
+          speak('Opening jobs section.');
+          navigate('/jobs');
+        }
+      };
+
+      const annyangLib = annyang as any;
+      if (annyangLib) {
+        annyangLib.addCommands(commands);
+        return () => annyangLib.removeCommands(Object.keys(commands));
+      }
+    }
+  }, [isVoiceMode, user]);
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border/40 bg-background/60 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60" role="navigation" aria-label="Main navigation">

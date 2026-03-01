@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,13 +10,14 @@ import { PostJobDialog } from '@/components/PostJobDialog';
 import { MOCK_JOBS } from '@/data/mockJobs';
 import { getLocalJobs } from '@/utils/localJobs';
 import type { Tables } from '@/integrations/supabase/types';
-import { useCallback } from 'react';
+import annyang from 'annyang';
+import { Link, useNavigate } from 'react-router-dom';
 
 const disabilityTypes = [
   { id: 'all', label: 'All', icon: Accessibility, color: 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20' },
   {
     id: 'blind', label: 'Visually Impaired', icon: Eye, color: 'bg-accent/10 text-accent-foreground border-accent/30 hover:bg-accent/20',
-    features: ['Screen reader compatible', 'Screen reader compatible software', 'Screen reader IDE support', 'Voice coding tools', 'Voice dictation', 'Voice-to-text']
+    features: ['Screen reader compatible', 'Voice dictation', 'Voice coding tools', 'Voice-to-text', 'Voice input support'],
   },
   {
     id: 'deaf', label: 'Hearing Impaired', icon: EarOff, color: 'bg-success/10 text-success border-success/30 hover:bg-success/20',
@@ -63,30 +64,90 @@ const Jobs = () => {
     fetchJobs();
   }, [fetchJobs]);
 
-  useEffect(() => {
-    if (isVoiceMode && !loading && jobs.length > 0) {
-      speak(`There are ${jobs.length} jobs available. You can say a job title to search. The jobs are: ${jobs.slice(0, 3).map(j => j.title).join(', ')}, and more.`);
-    }
-  }, [isVoiceMode, loading]);
+  const categories = ['all', ...Array.from(new Set(jobs.map(j => j.category)))];
 
   const handleVoiceSearch = async () => {
     const query = await listen();
     if (query) setSearch(query);
   };
 
-  const categories = ['all', ...Array.from(new Set(jobs.map(j => j.category)))];
-
   const filtered = jobs.filter(j => {
     const matchSearch = !search || j.title.toLowerCase().includes(search.toLowerCase()) || j.company.toLowerCase().includes(search.toLowerCase());
     const matchCat = category === 'all' || j.category === category;
-    const selectedDisability = disabilityTypes.find(d => d.id === disabilityFilter);
-    const matchDisability = disabilityFilter === 'all' || (
+
+    // Force blind filter if in voice mode
+    const effectiveDisabilityFilter = isVoiceMode ? 'blind' : disabilityFilter;
+    const selectedDisability = disabilityTypes.find(d => d.id === effectiveDisabilityFilter);
+    const matchDisability = effectiveDisabilityFilter === 'all' || (
       selectedDisability?.features &&
       j.accessibility_features &&
       j.accessibility_features.some(f => selectedDisability.features!.includes(f))
     );
     return matchSearch && matchCat && matchDisability;
   });
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let isAborted = false;
+
+    if (isVoiceMode && !loading && filtered.length > 0) {
+      const readJobs = async () => {
+        await speak(`I have found ${filtered.length} jobs for visually impaired candidates. I will read them one by one. Say the name of a job to view details, or say "next" for the next one.`);
+
+        if (isAborted) return;
+
+        const commands: Record<string, () => void> = {
+          'next': () => {
+            // Let the loop continue or skip to next
+          }
+        };
+
+        // Add each job title as a command
+        filtered.forEach(job => {
+          commands[job.title.toLowerCase()] = () => {
+            isAborted = true; // Stop the loop
+            window.speechSynthesis.cancel(); // Stop talking immediately
+            speak(`Opening details for ${job.title}`);
+            navigate(`/jobs/${job.id}`);
+          };
+        });
+
+        const annyangLib = annyang as any;
+        if (annyangLib) {
+          annyangLib.addCommands(commands);
+        }
+
+        for (let i = 0; i < filtered.length; i++) {
+          if (isAborted) break;
+          const job = filtered[i];
+          await speak(`Job ${i + 1}: ${job.title} at ${job.company}.`);
+
+          // Wait a bit between jobs for user to respond
+          for (let j = 0; j < 30; j++) { // 3 seconds total
+            if (isAborted) break;
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+      };
+
+      readJobs();
+
+      return () => {
+        isAborted = true;
+        window.speechSynthesis.cancel();
+        const annyangLib = annyang as any;
+        if (annyangLib) {
+          filtered.forEach(job => {
+            annyangLib.removeCommands(job.title.toLowerCase());
+          });
+          annyangLib.removeCommands('next');
+        }
+      };
+    } else if (isVoiceMode && !loading && filtered.length === 0) {
+      speak("I couldn't find any jobs matching the visually impaired filter at the moment.");
+    }
+  }, [isVoiceMode, loading, filtered.length, navigate]);
 
   return (
     <main className="container py-8 md:py-12">
@@ -145,11 +206,6 @@ const Jobs = () => {
             ))}
           </SelectContent>
         </Select>
-        {isVoiceMode && (
-          <button onClick={handleVoiceSearch} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground text-sm font-medium voice-pulse" aria-label="Voice search">
-            🎤 Voice Search
-          </button>
-        )}
       </div>
 
       {/* Jobs list */}

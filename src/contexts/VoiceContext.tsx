@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import * as annyangStatic from 'annyang';
-
-const annyang = annyangStatic as any;
+import annyang from 'annyang';
 
 interface VoiceContextType {
   isVoiceMode: boolean;
@@ -87,16 +85,49 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // ANNYANG Activation
   useEffect(() => {
-    if (isVoiceMode && annyang) {
-      setIsListening(true);
-      annyang.start({ autoRestart: true, continuous: true });
-    } else if (annyang) {
-      annyang.abort();
+    const annyangLib = annyang as any;
+    if (isVoiceMode && annyangLib) {
+      console.log('Starting annyang');
+      annyangLib.setLanguage('en-US');
+      annyangLib.debug(true);
+      annyangLib.start({ autoRestart: true, continuous: true });
+
+      // Update listening state based on annyang events
+      annyangLib.addCallback('start', () => {
+        console.log('Voice recognition started');
+        setIsListening(true);
+      });
+      annyangLib.addCallback('soundstart', () => {
+        console.log('Sound detected');
+        setIsListening(true);
+      });
+      annyangLib.addCallback('result', () => {
+        console.log('Speech result received');
+        setIsListening(true);
+      });
+      annyangLib.addCallback('end', () => {
+        console.log('Voice recognition ended');
+        if (!isVoiceMode) {
+          setIsListening(false);
+        }
+      });
+
+      // Handle errors
+      annyangLib.addCallback('error', (err: any) => {
+        console.error('Annyang error:', err);
+        if (err.error === 'no-speech') {
+          // This is normal if the user is quiet, don't show as error to user
+        }
+      });
+
+    } else if (annyangLib) {
+      console.log('Stopping annyang');
+      annyangLib.abort();
       setIsListening(false);
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
     }
-    return () => { if (annyang) annyang.abort(); };
+    return () => { if (annyangLib) annyangLib.abort(); };
   }, [isVoiceMode]);
 
   // VOICE GUIDANCE: Auto-read on focus
@@ -188,6 +219,10 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (dismissalTimerRef.current) clearTimeout(dismissalTimerRef.current);
 
           setIsVoiceMode(true);
+          const annyangLib = annyang as any;
+          if (annyangLib) {
+            annyangLib.start({ autoRestart: true, continuous: true });
+          }
           speak('Voice mode enabled. I will now guide you through the website.');
           cleanup();
         } else if (e.key !== 'Tab') {
@@ -230,7 +265,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <VoiceContext.Provider value={{
       isVoiceMode, setIsVoiceMode, speak, listen, readPageContent,
-      isListening: isVoiceMode, isSpeaking, isPrompting
+      isListening, isSpeaking, isPrompting
     }}>
       {children}
     </VoiceContext.Provider>

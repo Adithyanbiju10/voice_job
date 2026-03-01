@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { MapPin, Clock, DollarSign, Accessibility, ArrowRight } from 'lucide-react';
+import { MapPin, Clock, IndianRupee, Accessibility, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import type { Tables } from '@/integrations/supabase/types';
@@ -29,7 +29,7 @@ const JobCard = ({ job, index = 0 }: JobCardProps) => {
               <p className="text-sm font-medium text-muted-foreground mt-1">{job.company}</p>
               <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1"><MapPin className="h-3 w-3 text-primary/70" />{job.location}</span>
-                {job.salary_range && <span className="flex items-center gap-1"><DollarSign className="h-3 w-3 text-success/70" />{job.salary_range}</span>}
+                {job.salary_range && <span className="flex items-center gap-1"><IndianRupee className="h-3 w-3 text-success/70" />{job.salary_range}</span>}
                 <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-accent/70" />{new Date(job.posted_at).toLocaleDateString()}</span>
               </div>
               {job.accessibility_features && job.accessibility_features.length > 0 && (
