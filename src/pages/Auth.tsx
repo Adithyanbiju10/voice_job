@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Briefcase, User, Building, ArrowRight, Loader2 } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Briefcase, User, Building, ArrowRight, Loader2, Eye, EarOff, Accessibility, MessageCircleOff, Brain, HandMetal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,17 +15,28 @@ import annyang from 'annyang';
 const Auth = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [role, setRole] = useState<"seeker" | "employer">("seeker");
-    const [activeTab, setActiveTab] = useState("login");
-    const { isVoiceMode, speak } = useVoice();
-    const { login } = useAuth();
+    const [disability, setDisability] = useState<string>("none");
+    const lastPromptedTab = useRef<string | null>(null);
+    const [searchParams] = useSearchParams();
+    const mode = searchParams.get('mode');
+    const [activeTab, setActiveTab] = useState(mode === "signup" ? "signup" : "login");
+    const { isVoiceMode, speak, isAwake } = useVoice();
+    const { login, signup } = useAuth();
     const navigate = useNavigate();
     const { toast } = useToast();
+
+    const [loginEmail, setLoginEmail] = useState("");
+    const [loginPassword, setLoginPassword] = useState("");
+    const [signupName, setSignupName] = useState("");
+    const [signupEmail, setSignupEmail] = useState("");
+    const [signupPassword, setSignupPassword] = useState("");
 
     const nameRef = useRef<HTMLInputElement>(null);
     const signupEmailRef = useRef<HTMLInputElement>(null);
     const signupPasswordRef = useRef<HTMLInputElement>(null);
     const loginEmailRef = useRef<HTMLInputElement>(null);
     const loginPasswordRef = useRef<HTMLInputElement>(null);
+    const justSignedUp = useRef(false);
 
     const focusWithPulse = (ref: React.RefObject<HTMLInputElement>) => {
         if (ref.current) {
@@ -36,119 +47,52 @@ const Auth = () => {
     };
 
     useEffect(() => {
-        if (isVoiceMode) {
-            const initialPrompt = activeTab === "login"
-                ? "Sign in page. Please choose your email field to start, or say 'go to sign up' to create an account."
-                : "You are in sign up. First, are you a job seeker or an employer? Say 'select job seeker' or 'select employer'.";
-            speak(initialPrompt);
-
-            // Auto focus for better UX
-            if (activeTab === "login") {
-                setTimeout(() => focusWithPulse(loginEmailRef), 1000);
-            }
-
-            // Commands
-            const annyangLib = annyang as any;
-            if (annyangLib) {
-                const commands = {
-                    'select job seeker': () => {
-                        setRole("seeker");
-                        speak("Job seeker selected. Now, please focus on the Name field to enter your details.");
-                        setTimeout(() => focusWithPulse(nameRef), 500);
-                    },
-                    'select seeker': () => {
-                        setRole("seeker");
-                        speak("Job seeker selected. Now, please focus on the Name field to enter your details.");
-                        setTimeout(() => focusWithPulse(nameRef), 500);
-                    },
-                    'select employer': () => {
-                        setRole("employer");
-                        speak("Employer selected. Now, please focus on the Company Name field to enter your details.");
-                        setTimeout(() => focusWithPulse(nameRef), 500);
-                    },
-                    'choose seeker': () => {
-                        setRole("seeker");
-                        speak("Job seeker selected.");
-                        setTimeout(() => focusWithPulse(nameRef), 500);
-                    },
-                    'choose employer': () => {
-                        setRole("employer");
-                        speak("Employer selected.");
-                        setTimeout(() => focusWithPulse(nameRef), 500);
-                    },
-                    'go to sign up': () => {
-                        setActiveTab("signup");
-                        speak("You are in sign up. Are you a job seeker or an employer?");
-                    },
-                    'go to sign in': () => {
-                        setActiveTab("login");
-                        speak("Switched to sign in.");
-                        setTimeout(() => focusWithPulse(loginEmailRef), 400);
-                    },
-                    'sign up': () => {
-                        setActiveTab("signup");
-                        speak("You are in sign up.");
-                    },
-                    'sign in': () => {
-                        setActiveTab("login");
-                        speak("Switched to sign in.");
-                        setTimeout(() => focusWithPulse(loginEmailRef), 400);
-                    },
-                    'log in': () => {
-                        setActiveTab("login");
-                        speak("Switched to sign in.");
-                        setTimeout(() => focusWithPulse(loginEmailRef), 400);
-                    },
-                    'email': () => {
-                        if (activeTab === 'login') focusWithPulse(loginEmailRef);
-                        else focusWithPulse(signupEmailRef);
-                        speak("Email field ready.");
-                    },
-                    'username': () => {
-                        if (activeTab === 'login') focusWithPulse(loginEmailRef);
-                        else focusWithPulse(nameRef);
-                        speak("Field ready.");
-                    },
-                    'user name': () => {
-                        if (activeTab === 'login') focusWithPulse(loginEmailRef);
-                        else focusWithPulse(nameRef);
-                        speak("Field ready.");
-                    },
-                    'mail': () => {
-                        if (activeTab === 'login') focusWithPulse(loginEmailRef);
-                        else focusWithPulse(signupEmailRef);
-                        speak("Email field ready.");
-                    },
-                    'password': () => {
-                        if (activeTab === 'login') focusWithPulse(loginPasswordRef);
-                        else focusWithPulse(signupPasswordRef);
-                        speak("Password field ready.");
-                    },
-                    'pass': () => {
-                        if (activeTab === 'login') focusWithPulse(loginPasswordRef);
-                        else focusWithPulse(signupPasswordRef);
-                        speak("Password ready.");
-                    },
-                    'secret': () => {
-                        if (activeTab === 'login') focusWithPulse(loginPasswordRef);
-                        else focusWithPulse(signupPasswordRef);
-                        speak("Password ready.");
-                    },
-                    'type password': () => {
-                        if (activeTab === 'login') focusWithPulse(loginPasswordRef);
-                        else focusWithPulse(signupPasswordRef);
-                        speak("Password field ready.");
-                    }
-                };
-                annyangLib.addCommands(commands);
-                return () => {
-                    if (annyangLib.removeCommands) {
-                        annyangLib.removeCommands(Object.keys(commands));
-                    }
-                };
-            }
+        if (activeTab === "login") {
+            setTimeout(() => focusWithPulse(loginEmailRef), 400);
         }
-    }, [isVoiceMode, activeTab]);
+    }, [activeTab]);
+
+    useEffect(() => {
+        if (mode === "signup" || mode === "login") {
+            setActiveTab(mode);
+        }
+    }, [mode]);
+
+    useEffect(() => {
+        if (isVoiceMode && isAwake) {
+            const handleCommand = (e: any) => {
+                const cmd = e.detail;
+                if (cmd === 'select-seeker') {
+                    setActiveTab("signup");
+                    setRole("seeker");
+                    speak("Setting your role as job seeker. You can now tell me your name or focus on the name field to begin your profile.");
+                    setTimeout(() => focusWithPulse(nameRef), 500);
+                } else if (cmd === 'select-employer') {
+                    setActiveTab("signup");
+                    setRole("employer");
+                    speak("Setting your role as employer. Please tell me your company name or focus on the company name field to start hiring.");
+                    setTimeout(() => focusWithPulse(nameRef), 500);
+                } else if (cmd === 'select-blind') {
+                    setActiveTab("signup");
+                    setDisability('blind');
+                    setRole('seeker');
+                    speak("Activating accessibility mode for visually impaired. I'll read everything aloud for you. Setting your role to job seeker.");
+                }
+            };
+
+            window.addEventListener('voice-command', handleCommand);
+
+            if (lastPromptedTab.current !== activeTab) {
+                const initialPrompt = activeTab === "login"
+                    ? "Welcome back. Log in or say 'go to sign up' to create an account."
+                    : "Welcome. Are you a job seeker or an employer? Just tell me what you're looking for.";
+                speak(initialPrompt);
+                lastPromptedTab.current = activeTab;
+            }
+
+            return () => window.removeEventListener('voice-command', handleCommand);
+        }
+    }, [isVoiceMode, isAwake, activeTab]);
 
     const handleSignupNameEnter = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && isVoiceMode) {
@@ -159,18 +103,30 @@ const Auth = () => {
     };
 
     const handleSignupEmailEnter = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && isVoiceMode) {
+        if (e.key === 'Enter') {
             e.preventDefault();
             focusWithPulse(signupPasswordRef);
-            speak("Email entered. Finally, type a password and press Enter to complete sign up.");
+            if (isVoiceMode) speak("Email entered. Finally, type a password and press Enter to complete sign up.");
+        }
+    };
+
+    const handleSignupPasswordEnter = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleSignup(e as any);
         }
     };
 
     const handleLoginEmailEnter = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && isVoiceMode) {
+        if (e.key === 'Enter') {
             e.preventDefault();
             focusWithPulse(loginPasswordRef);
-            speak("Email entered. Now type your password and press Enter to sign in.");
+            if (isVoiceMode) speak("Email entered. Now type your password and press Enter to sign in.");
+        }
+    };
+
+    const handleLoginPasswordEnter = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleLogin(e as any);
         }
     };
 
@@ -178,39 +134,74 @@ const Auth = () => {
         e.preventDefault();
         setIsLoading(true);
 
-        const form = e.target as HTMLFormElement;
-        const emailInput = form.querySelector('input[type="email"]') as HTMLInputElement;
-        const email = emailInput?.value || 'user@example.com';
-        const name = email.split('@')[0];
+        const email = loginEmail.trim();
+        const password = loginPassword;
 
         setTimeout(() => {
-            login({ name, email, role });
-            setIsLoading(false);
-            toast({
-                title: "Welcome back!",
-                description: "You have successfully signed in.",
-            });
-            if (isVoiceMode) {
-                speak("Sign in successful! Redirecting to home page.");
+            const success = login(email, password);
+
+            if (success) {
+                setIsLoading(false);
+                toast({
+                    title: "Welcome back!",
+                    description: "You have successfully signed in.",
+                });
+                if (isVoiceMode) {
+                    speak(`Welcome back! Redirecting to home page.`);
+                }
+                navigate("/");
+            } else {
+                // For demo/UX: If user not found, let's create it on the fly if it looks like a demo user
+                // but better practice is to inform them or use a default one
+                if (email === 'user@example.com' || email === 'employer@example.com') {
+                    const mockUser = {
+                        name: email === 'user@example.com' ? 'Job Seeker' : 'TechCorp',
+                        email,
+                        role: email === 'user@example.com' ? 'seeker' as const : 'employer' as const,
+                        disability: 'none'
+                    };
+                    signup(mockUser);
+                    setIsLoading(false);
+                    toast({
+                        title: "Welcome!",
+                        description: "Logged in with demo account.",
+                    });
+                    navigate("/");
+                } else {
+                    setIsLoading(false);
+                    toast({
+                        title: "Login failed",
+                        description: "I haven't seen you before. Please use 'Sign Up' if this is your first time!",
+                        variant: "destructive"
+                    });
+                    if (isVoiceMode) speak("I couldn't find your account. Would you like to sign up instead?");
+                }
             }
-            navigate("/");
-        }, 1200);
+        }, 1000);
     };
 
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
 
+        const name = signupName.trim() || (role === 'seeker' ? 'New Seeker' : 'New Employer');
+        const email = signupEmail.trim();
+
         setTimeout(() => {
             setIsLoading(false);
+            if (!email) {
+                toast({ title: "Email required", variant: "destructive" });
+                return;
+            }
+            signup({ name, email, role, disability });
             toast({
                 title: "Account created!",
-                description: "Please sign in with your credentials to continue.",
+                description: `Welcome to AbilityJobs, ${name}!`,
             });
-            setActiveTab("login");
             if (isVoiceMode) {
-                speak("Sign up successful! Now please sign in with your account.");
+                speak(`Account created successfully! Welcome ${name}. Taking you to your profile.`);
             }
+            navigate("/profile");
         }, 1200);
     };
 
@@ -230,8 +221,20 @@ const Auth = () => {
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-2 mb-8 bg-muted/50 p-1 rounded-full border border-border/50">
-                        <TabsTrigger value="login" className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm">Sign In</TabsTrigger>
-                        <TabsTrigger value="signup" className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm">Sign Up</TabsTrigger>
+                        <TabsTrigger
+                            value="login"
+                            onFocus={() => isVoiceMode && speak("Sign In tab. Use this if you already have an account.")}
+                            className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                        >
+                            Sign In
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="signup"
+                            onFocus={() => isVoiceMode && speak("Sign Up tab. Use this to create a new account.")}
+                            className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                        >
+                            Sign Up
+                        </TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="login" className="mt-0">
@@ -249,6 +252,8 @@ const Auth = () => {
                                             type="email"
                                             placeholder="m@example.com"
                                             required
+                                            value={loginEmail}
+                                            onChange={(e) => setLoginEmail(e.target.value)}
                                             className="bg-background/50 h-11"
                                             ref={loginEmailRef}
                                             onKeyDown={handleLoginEmailEnter}
@@ -263,8 +268,11 @@ const Auth = () => {
                                             id="password"
                                             type="password"
                                             required
+                                            value={loginPassword}
+                                            onChange={(e) => setLoginPassword(e.target.value)}
                                             className="bg-background/50 h-11"
                                             ref={loginPasswordRef}
+                                            onKeyDown={handleLoginPasswordEnter}
                                         />
                                     </div>
                                 </CardContent>
@@ -285,29 +293,69 @@ const Auth = () => {
                             </CardHeader>
                             <form onSubmit={handleSignup}>
                                 <CardContent className="space-y-6">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setRole("seeker")}
-                                            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${role === "seeker"
-                                                ? "border-primary bg-primary/5 text-primary"
-                                                : "border-border/50 bg-background/50 text-muted-foreground hover:border-primary/30"
-                                                }`}
-                                        >
-                                            <User className="h-6 w-6 mb-2" />
-                                            <span className="font-medium text-sm">Job Seeker</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setRole("employer")}
-                                            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${role === "employer"
-                                                ? "border-accent bg-accent/5 text-accent-foreground"
-                                                : "border-border/50 bg-background/50 text-muted-foreground hover:border-accent/30"
-                                                }`}
-                                        >
-                                            <Building className="h-6 w-6 mb-2" />
-                                            <span className="font-medium text-sm">Employer</span>
-                                        </button>
+                                    <div className="space-y-4">
+                                        <Label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Disability Type (Optional)</Label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                { id: 'none', label: 'None', icon: Accessibility },
+                                                { id: 'blind', label: 'Visual', icon: Eye },
+                                                { id: 'deaf', label: 'Hearing', icon: EarOff },
+                                                { id: 'physical', label: 'Physical', icon: HandMetal },
+                                                { id: 'speech', label: 'Speech', icon: MessageCircleOff },
+                                                { id: 'cognitive', label: 'Cognitive', icon: Brain },
+                                            ].map((type) => (
+                                                <button
+                                                    key={type.id}
+                                                    type="button"
+                                                    onFocus={() => isVoiceMode && speak(`Disability type: ${type.label}. ${disability === type.id ? 'Currently selected.' : 'Choice available.'}`)}
+                                                    onClick={() => {
+                                                        setDisability(type.id);
+                                                        if (type.id === 'blind') {
+                                                            setRole("seeker");
+                                                            if (isVoiceMode) speak("Visually impaired selected. Automatically setting role to Job Seeker.");
+                                                        }
+                                                    }}
+                                                    className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${disability === type.id
+                                                        ? "border-primary bg-primary/10 text-primary shadow-sm"
+                                                        : "border-border/50 bg-background/50 text-muted-foreground hover:border-primary/30"
+                                                        }`}
+                                                >
+                                                    <type.icon className="h-4 w-4 mb-1" />
+                                                    <span className="text-[10px] font-medium">{type.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Account Role</Label>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button
+                                                type="button"
+                                                onFocus={() => isVoiceMode && speak(`Role: Job Seeker. ${role === 'seeker' ? 'Currently selected.' : 'Select this if you are looking for work.'}`)}
+                                                onClick={() => setRole("seeker")}
+                                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${role === "seeker"
+                                                    ? "border-primary bg-primary/5 text-primary"
+                                                    : "border-border/50 bg-background/50 text-muted-foreground hover:border-primary/30"
+                                                    }`}
+                                            >
+                                                <User className="h-6 w-6 mb-2" />
+                                                <span className="font-medium text-sm">Job Seeker</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={disability === 'blind'}
+                                                onFocus={() => isVoiceMode && speak(`Role: Employer. ${role === 'employer' ? 'Currently selected.' : 'Select this if you want to post jobs and hire.'}`)}
+                                                onClick={() => setRole("employer")}
+                                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${role === "employer"
+                                                    ? "border-accent bg-accent/5 text-accent-foreground"
+                                                    : "border-border/50 bg-background/50 text-muted-foreground hover:border-accent/30"
+                                                    } ${disability === 'blind' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            >
+                                                <Building className="h-6 w-6 mb-2" />
+                                                <span className="font-medium text-sm">Employer</span>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <div className="space-y-4">
@@ -317,6 +365,9 @@ const Auth = () => {
                                                 id="signup-name"
                                                 placeholder={role === "seeker" ? "John Doe" : "Acme Corp"}
                                                 required
+                                                value={signupName}
+                                                onFocus={() => isVoiceMode && speak(`Enter your ${role === "seeker" ? "full name" : "company name"}. You can say type followed by your name to fill this filed.`)}
+                                                onChange={(e) => setSignupName(e.target.value)}
                                                 className="bg-background/50 h-11"
                                                 ref={nameRef}
                                                 onKeyDown={handleSignupNameEnter}
@@ -329,6 +380,9 @@ const Auth = () => {
                                                 type="email"
                                                 placeholder="m@example.com"
                                                 required
+                                                value={signupEmail}
+                                                onFocus={() => isVoiceMode && speak("Enter your email address. This will be used for your account login.")}
+                                                onChange={(e) => setSignupEmail(e.target.value)}
                                                 className="bg-background/50 h-11"
                                                 ref={signupEmailRef}
                                                 onKeyDown={handleSignupEmailEnter}
@@ -340,8 +394,12 @@ const Auth = () => {
                                                 id="signup-password"
                                                 type="password"
                                                 required
+                                                value={signupPassword}
+                                                onFocus={() => isVoiceMode && speak("Create a secure password. For security, I will not read back what you type here.")}
+                                                onChange={(e) => setSignupPassword(e.target.value)}
                                                 className="bg-background/50 h-11"
                                                 ref={signupPasswordRef}
+                                                onKeyDown={handleSignupPasswordEnter}
                                             />
                                         </div>
                                     </div>

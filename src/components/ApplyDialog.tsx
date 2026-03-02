@@ -23,7 +23,7 @@ interface ApplyDialogProps {
 
 const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: ApplyDialogProps) => {
   const { toast } = useToast();
-  const { speak, isVoiceMode } = useVoice();
+  const { speak, isVoiceMode, isAwake } = useVoice();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState('');
@@ -38,7 +38,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
   const successButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (open && isVoiceMode && !success) {
+    if (open && isVoiceMode && isAwake && !success) {
       if (user?.role === 'seeker') {
         speak(`Applying for ${jobTitle}. First, please type a short pitch about yourself in the first field and press Enter.`);
       } else {
@@ -54,13 +54,33 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
 
   useEffect(() => {
     if (success && isVoiceMode) {
-      speak('Application submitted! You can now say "go to home" to return to the landing page, or press Enter to close this window.');
+      // Ensure the AI is awake to catch the next command
+      const triggerSuccessVoice = async () => {
+        await speak('Application submitted successfully! You are all set.');
+        speak('Would you like to go back to the home page or continue searching for other jobs?');
+      };
+      triggerSuccessVoice();
 
       const commands = {
         'go to home': () => {
           speak('Navigating to home page.');
           handleClose(false);
           navigate('/');
+        },
+        'search for jobs': () => {
+          speak('Opening the browse jobs section. Let\'s find your next opportunity.');
+          handleClose(false);
+          navigate('/jobs');
+        },
+        'find more': () => {
+          speak('Heading back to the search page.');
+          handleClose(false);
+          navigate('/jobs');
+        },
+        'browse': () => {
+          speak('Redirecting you to the jobs list.');
+          handleClose(false);
+          navigate('/jobs');
         }
       };
 
@@ -83,7 +103,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
         window.removeEventListener('keydown', handleEnter);
       };
     }
-  }, [success, isVoiceMode, navigate]);
+  }, [success, isVoiceMode, navigate, speak]);
 
   const handlePitchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && isVoiceMode) {
@@ -152,6 +172,11 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
         resumeUrl = 'https://example.com/mock-resume.pdf';
       }
 
+      // Fallback for demo purposes if no URL was set
+      if (!resumeUrl) {
+        resumeUrl = 'https://example.com/mock-resume-fallback.pdf';
+      }
+
       // Save application to localStorage for Profile visibility
       const applicationData = {
         id: crypto.randomUUID(),
@@ -162,7 +187,8 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
         applicantEmail: email,
         coverLetter: coverLetter,
         appliedAt: new Date().toISOString(),
-        status: 'Pending'
+        status: 'Pending',
+        resume_url: resumeUrl
       };
 
       const existingApps = JSON.parse(localStorage.getItem('user_applications') || '[]');

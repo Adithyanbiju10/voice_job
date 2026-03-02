@@ -14,14 +14,14 @@ const features = [
 import { useAuth } from '@/contexts/AuthContext';
 
 const Index = () => {
-  const { isVoiceMode, speak } = useVoice();
+  const { isVoiceMode, speak, isAwake } = useVoice();
   const { user } = useAuth();
 
   useEffect(() => {
-    if (isVoiceMode && !user) {
+    if (isVoiceMode && isAwake && !user) {
       speak("Welcome to Ability Jobs. You are currently not signed in. You can say 'go to login' to sign in or create an account.");
     }
-  }, [isVoiceMode, user]);
+  }, [isVoiceMode, isAwake, user]);
 
   return (
     <main>

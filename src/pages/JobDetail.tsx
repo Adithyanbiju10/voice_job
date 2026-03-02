@@ -19,7 +19,7 @@ const JobDetail = () => {
   const [job, setJob] = useState<Tables<'jobs'> | null>(null);
   const [loading, setLoading] = useState(true);
   const [applyOpen, setApplyOpen] = useState(false);
-  const { isVoiceMode, speak, listen } = useVoice();
+  const { isVoiceMode, speak, listen, isAwake } = useVoice();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -51,60 +51,46 @@ const JobDetail = () => {
   }, [id]);
 
   useEffect(() => {
-    if (isVoiceMode && job) {
-      let applyPrompt = ' Say "back" to go back.';
-      if (user?.role === 'seeker') {
-        applyPrompt = ' Say "apply now" or "apply" to apply for this job, or "back" to go back.';
-      } else if (!user) {
-        applyPrompt = ' You can say "apply now" to sign in and apply for this job, or "back" to go back.';
-      }
-
-      const fullDescription = `
-        Job details for ${job.title} at ${job.company}.
-        Location: ${job.location}.
-        Salary: ${job.salary_range || 'Not specified'}.
-        Description: ${job.description}.
-        Requirements: ${job.requirements?.join(', ') || 'No specific requirements listed'}.
-        Accessibility Features: ${job.accessibility_features?.join(', ') || 'Standard accessibility'}.
-        ${applyPrompt}
-      `;
-
-      speak(fullDescription);
-
+    if (isVoiceMode && isAwake && job) {
       const handleApply = () => {
         if (!user) {
-          speak('You need to sign in to apply. Opening the sign-in prompt.');
+          speak('You need to sign in to apply. Opening the login prompt.');
           setApplyOpen(true);
         } else if (user.role === 'seeker') {
-          speak('Opening application form.');
+          speak('Opening the application form.');
           setApplyOpen(true);
         } else {
           speak('Only job seekers can apply for jobs.');
         }
       };
 
-      const commands = {
-        'apply': handleApply,
-        'apply now': handleApply,
-        'back': () => {
-          speak('Going back to jobs list.');
-          navigate('/jobs');
-        },
-        'go to home': () => {
-          speak('Navigating to home page.');
-          navigate('/');
+      const handleCommand = (e: any) => {
+        if (e.detail === 'apply') {
+          handleApply();
         }
       };
 
-      const annyangLib = annyang as any;
-      if (annyangLib) {
-        annyangLib.addCommands(commands);
-        return () => {
-          annyangLib.removeCommands(Object.keys(commands));
-        };
-      }
+      window.addEventListener('voice-command', handleCommand);
+
+      const readJobDetails = async () => {
+        await speak(`Job selected: ${job.title} at ${job.company}. Located in ${job.location}.`);
+
+        let accessibilityInfo = "";
+        if (job.accessibility_features && job.accessibility_features.length > 0) {
+          accessibilityInfo = `This workplace includes accessibility features such as: ${job.accessibility_features.join(', ')}. `;
+        }
+
+        await speak(`Description: ${job.description}. ${accessibilityInfo} Say 'apply' at any time to start your application.`);
+      };
+
+      readJobDetails();
+
+      return () => {
+        window.removeEventListener('voice-command', handleCommand);
+        window.speechSynthesis.cancel();
+      };
     }
-  }, [isVoiceMode, job, user, navigate]);
+  }, [isVoiceMode, isAwake, job, user]);
 
   if (loading) {
     return (

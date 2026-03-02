@@ -32,35 +32,7 @@ const Navbar = () => {
 
   useEffect(() => {
     if (isVoiceMode) {
-      const commands = {
-        'go to profile': () => {
-          if (user) {
-            speak('Navigating to your profile.');
-            navigate('/profile');
-          } else {
-            speak('Please sign in first to view your profile.');
-            navigate('/auth');
-          }
-        },
-        'go to home': () => {
-          speak('Returning home.');
-          navigate('/');
-        },
-        'home': () => {
-          speak('Returning home.');
-          navigate('/');
-        },
-        'jobs': () => {
-          speak('Opening jobs section.');
-          navigate('/jobs');
-        }
-      };
-
-      const annyangLib = annyang as any;
-      if (annyangLib) {
-        annyangLib.addCommands(commands);
-        return () => annyangLib.removeCommands(Object.keys(commands));
-      }
+      // Logic for page-specific context can go here if needed
     }
   }, [isVoiceMode, user]);
 

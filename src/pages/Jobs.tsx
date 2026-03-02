@@ -43,7 +43,7 @@ const Jobs = () => {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [disabilityFilter, setDisabilityFilter] = useState('all');
-  const { isVoiceMode, speak, listen } = useVoice();
+  const { isVoiceMode, speak, listen, isAwake } = useVoice();
   const { user } = useAuth();
 
   const fetchJobs = useCallback(async () => {
@@ -91,63 +91,73 @@ const Jobs = () => {
   useEffect(() => {
     let isAborted = false;
 
-    if (isVoiceMode && !loading && filtered.length > 0) {
-      const readJobs = async () => {
-        await speak(`I have found ${filtered.length} jobs for visually impaired candidates. I will read them one by one. Say the name of a job to view details, or say "next" for the next one.`);
-
-        if (isAborted) return;
-
-        const commands: Record<string, () => void> = {
-          'next': () => {
-            // Let the loop continue or skip to next
-          }
-        };
-
-        // Add each job title as a command
-        filtered.forEach(job => {
-          commands[job.title.toLowerCase()] = () => {
-            isAborted = true; // Stop the loop
-            window.speechSynthesis.cancel(); // Stop talking immediately
-            speak(`Opening details for ${job.title}`);
-            navigate(`/jobs/${job.id}`);
-          };
-        });
-
-        const annyangLib = annyang as any;
-        if (annyangLib) {
-          annyangLib.addCommands(commands);
-        }
-
-        for (let i = 0; i < filtered.length; i++) {
-          if (isAborted) break;
-          const job = filtered[i];
-          await speak(`Job ${i + 1}: ${job.title} at ${job.company}.`);
-
-          // Wait a bit between jobs for user to respond
-          for (let j = 0; j < 30; j++) { // 3 seconds total
-            if (isAborted) break;
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-        }
-      };
-
-      readJobs();
-
-      return () => {
+    const handleCommand = (e: any) => {
+      if (e.detail === 'next') {
+        // Skipping wait is handled by checking isAborted
+      }
+      if (e.detail === 'stop') {
         isAborted = true;
         window.speechSynthesis.cancel();
-        const annyangLib = annyang as any;
-        if (annyangLib) {
-          filtered.forEach(job => {
-            annyangLib.removeCommands(job.title.toLowerCase());
-          });
-          annyangLib.removeCommands('next');
-        }
-      };
-    } else if (isVoiceMode && !loading && filtered.length === 0) {
-      speak("I couldn't find any jobs matching the visually impaired filter at the moment.");
+      }
+    };
+
+    const handleSearch = (e: any) => {
+      setSearch(e.detail);
+    };
+
+    // New: Handle raw voice input for flexible matching
+    const handleVoiceInput = (e: any) => {
+      const text = e.detail.toLowerCase().trim();
+      // Try to match a job title from the current filtered list
+      const matchedJob = filtered.find(j =>
+        text.includes(j.title.toLowerCase()) ||
+        j.title.toLowerCase().includes(text)
+      );
+
+      if (matchedJob) {
+        isAborted = true;
+        window.speechSynthesis.cancel();
+        speak(`Opening ${matchedJob.title}`);
+        navigate(`/jobs/${matchedJob.id}`);
+      }
+    };
+
+    if (isVoiceMode && isAwake && !loading) {
+      if (filtered.length > 0) {
+        window.addEventListener('voice-command', handleCommand);
+        window.addEventListener('voice-search', handleSearch);
+        window.addEventListener('voice-input', handleVoiceInput);
+
+        const readJobs = async () => {
+          await speak(`I found ${filtered.length} jobs. Say a job title anytime to open it, or "next" to continue.`);
+
+          for (let i = 0; i < filtered.length; i++) {
+            if (isAborted) break;
+            const job = filtered[i];
+
+            await speak(`${job.title} at ${job.company}.`);
+
+            // Wait for reaction/next
+            for (let j = 0; j < 30; j++) {
+              if (isAborted) break;
+              await new Promise(r => setTimeout(r, 100));
+            }
+          }
+        };
+        readJobs();
+      } else {
+        speak("I couldn't find any jobs matching that filter.");
+      }
     }
-  }, [isVoiceMode, loading, filtered.length, navigate]);
+
+    return () => {
+      isAborted = true;
+      window.speechSynthesis.cancel();
+      window.removeEventListener('voice-command', handleCommand);
+      window.removeEventListener('voice-search', handleSearch);
+      window.removeEventListener('voice-input', handleVoiceInput);
+    };
+  }, [isVoiceMode, isAwake, loading, filtered.length, navigate]);
 
   return (
     <main className="container py-8 md:py-12">

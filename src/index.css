@@ -171,4 +171,62 @@
       outline-offset: 0px;
     }
   }
+
+  /* HIGH CONTRAST FOCUS MODE */
+  .focus-mode {
+    --background: 0 0% 0% !important;
+    --foreground: 50 100% 50% !important;
+    --card: 0 0% 0% !important;
+    --card-foreground: 50 100% 50% !important;
+    --primary: 50 100% 50% !important;
+    --primary-foreground: 0 0% 0% !important;
+    --muted: 0 0% 10% !important;
+    --muted-foreground: 50 100% 70% !important;
+    --border: 50 100% 50% !important;
+    --accent: 50 100% 50% !important;
+    --accent-foreground: 0 0% 0% !important;
+    font-size: 1.25rem !important;
+  }
+
+  .focus-mode body {
+    background-color: black !important;
+    color: #ffcc00 !important;
+  }
+
+  .focus-mode h1 {
+    font-size: 3rem !important;
+    font-weight: 900 !important;
+  }
+
+  .focus-mode h2 {
+    font-size: 2.5rem !important;
+    font-weight: 800 !important;
+  }
+
+  .focus-mode h3 {
+    font-size: 2rem !important;
+    font-weight: 700 !important;
+  }
+
+  .focus-mode p,
+  .focus-mode span,
+  .focus-mode label,
+  .focus-mode input {
+    font-size: 1.4rem !important;
+    line-height: 1.6 !important;
+    font-weight: 600 !important;
+  }
+
+  .focus-mode .absolute.blur-\[100px\],
+  .focus-mode .absolute.blur-\[80px\],
+  .focus-mode .absolute.blur-3xl {
+    display: none !important;
+  }
+
+  .focus-mode button,
+  .focus-mode .card,
+  .focus-mode input {
+    border: 3px solid #ffcc00 !important;
+    border-radius: 4px !important;
+  }
 }

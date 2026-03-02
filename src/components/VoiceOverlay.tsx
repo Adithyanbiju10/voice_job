@@ -2,11 +2,11 @@ import { useVoice } from '@/contexts/VoiceContext';
 import { Mic } from 'lucide-react';
 
 const VoiceOverlay = () => {
-  const { isListening, isSpeaking, isPrompting } = useVoice();
+  const { isListening, isSpeaking, isPrompting, isAwake, lastHeard } = useVoice();
 
   if (!isListening && !isSpeaking && !isPrompting) return null;
 
-  // Initial Accessibility Prompt - Keep centered but more transparent
+  // Initial Accessibility Prompt
   if (isPrompting) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all duration-500 pointer-events-auto">
@@ -21,7 +21,7 @@ const VoiceOverlay = () => {
               Press <span className="inline-block px-3 py-1 bg-primary text-primary-foreground rounded-lg shadow-md animate-pulse">Enter</span> now to enable full voice guidance.
             </p>
             <p className="mt-6 text-sm text-muted-foreground italic">
-              To continue without voice assistance, please wait or click anywhere.
+              To continue without voice assistance, click anywhere.
             </p>
           </div>
         </div>
@@ -29,32 +29,45 @@ const VoiceOverlay = () => {
     );
   }
 
-  // Active Voice Mode - Floating Widget in Bottom Right
+  // Active Voice Mode - Floating Widget
   return (
-    <div className="fixed bottom-6 right-6 z-[100] pointer-events-none">
+    <div className="fixed bottom-6 right-6 z-[100] pointer-events-none flex flex-col items-end gap-3 translate-y-0 animate-in slide-in-from-bottom-5 duration-500">
+      {/* Speech Debug Bubble */}
+      {isAwake && lastHeard && (
+        <div className="bg-background/80 backdrop-blur-md border border-border/50 px-4 py-2 rounded-2xl rounded-br-none shadow-xl max-w-[250px] animate-in fade-in slide-in-from-right-5 duration-300 pointer-events-auto">
+          <p className="text-xs font-medium text-foreground italic leading-tight">
+            "{lastHeard}"
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-col items-end gap-3 pointer-events-auto">
         <div className={`flex items-center gap-4 pl-5 pr-2 py-2 rounded-full border backdrop-blur-md shadow-lg transition-all duration-500 transform
-          ${isListening ? 'bg-primary/5 border-primary/20 scale-100' : 'bg-background/20 border-border/20 scale-95 opacity-80'}
+          ${isAwake ? 'bg-primary/10 border-primary/30 scale-100' : 'bg-background/40 border-border/20 scale-95 opacity-90'}
         `}>
           <div className="flex flex-col items-start leading-tight">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-primary/70">Assistant</p>
-            <p className="text-xs font-heading font-semibold text-foreground/80">
-              {isListening ? (
-                <span className="flex items-center gap-1.5">
-                  <span className="flex gap-[2px] h-3 items-center">
-                    <span className="w-0.5 h-full bg-primary animate-voice-bar-1"></span>
-                    <span className="w-0.5 h-2/3 bg-primary animate-voice-bar-2"></span>
-                    <span className="w-0.5 h-full bg-primary animate-voice-bar-3"></span>
+            <p className={`text-[9px] font-bold uppercase tracking-widest ${isAwake ? 'text-primary' : 'text-muted-foreground'}`}>
+              {isAwake ? 'Active' : 'Waiting'}
+            </p>
+            <p className="text-xs font-heading font-semibold text-foreground/90">
+              {isAwake ? (
+                isSpeaking ? 'Speaking...' : (
+                  <span className="flex items-center gap-1.5">
+                    <span className="flex gap-[2px] h-3 items-center">
+                      <span className="w-0.5 h-full bg-primary animate-voice-bar-1"></span>
+                      <span className="w-0.5 h-2/3 bg-primary animate-voice-bar-2"></span>
+                      <span className="w-0.5 h-full bg-primary animate-voice-bar-3"></span>
+                    </span>
+                    Listening...
                   </span>
-                  Ready to help
-                </span>
-              ) : isSpeaking ? 'Speaking...' : 'Ready'}
+                )
+              ) : 'Say "Hey Ability"'}
             </p>
           </div>
           <div className={`rounded-full p-2.5 shadow-sm transition-all duration-500
-            ${isListening ? 'bg-primary text-primary-foreground shadow-primary/20' : 'bg-secondary/40 text-muted-foreground'}
+            ${isAwake ? 'bg-primary text-primary-foreground shadow-primary/20' : 'bg-secondary/60 text-muted-foreground/60'}
           `}>
-            {isListening ? (
+            {isListening && isAwake ? (
               <div className="relative">
                 <Mic className="h-4 w-4" />
                 <span className="absolute -inset-1 rounded-full border border-primary/50 animate-ping opacity-20"></span>

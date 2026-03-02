@@ -17,7 +17,7 @@ const LOCAL_JOBS_KEY = 'ability_jobs_local_listings';
 const Profile = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const { isVoiceMode, speak, listen } = useVoice();
+    const { isVoiceMode, speak, listen, isAwake } = useVoice();
     const [applications, setApplications] = useState<any[]>([]);
     const [myPostings, setMyPostings] = useState<any[]>([]);
     const [applicants, setApplicants] = useState<any[]>([]);
@@ -51,79 +51,61 @@ const Profile = () => {
     }, [user]);
 
     useEffect(() => {
-        if (isVoiceMode && user) {
-            const initialPrompt = `Welcome to your profile, ${user.name}. You are logged in ${user.role === 'employer' ? 'as an employer' : 'as a job seeker'}. Would you like to sign out? Just say "sign out". Or, to see your application status, say "application".`;
-
-            // Only speak the full intro if we are on the account tab and just loaded or returned
-            if (activeTab === 'account') {
-                speak(initialPrompt);
-            }
-
-            const commands = {
-                'sign out': () => {
-                    speak("Signing you out now. Goodbye!");
+        if (isVoiceMode && isAwake && user) {
+            const handleCommand = async (e: any) => {
+                const cmd = e.detail;
+                if (cmd === 'logout') {
                     handleLogout();
-                },
-                'application': async () => {
+                } else if (cmd === 'applications') {
                     if (user.role === 'seeker') {
                         setActiveTab("applications");
                         if (applications.length === 0) {
-                            speak("You haven't applied to any jobs yet. Returning to account settings.");
+                            speak("You haven't applied to any jobs yet.");
                         } else {
-                            speak(`Opening your applications. You have ${applications.length} applications. I will read them one by one.`);
+                            speak(`You have ${applications.length} applications.`);
                             for (const app of applications) {
-                                let statusMsg = `Application for ${app.jobTitle} is currently ${app.status}.`;
-                                if (app.status === 'Accepted') statusMsg = `Congratulations! Your application for ${app.jobTitle} has been accepted.`;
-                                if (app.status === 'Rejected') statusMsg = `Sorry, your application for ${app.jobTitle} was not selected this time.`;
-                                await speak(statusMsg);
+                                await speak(`Application for ${app.jobTitle} is ${app.status}.`);
                             }
                         }
-                        // Come back to sign out side after reading (or if zero)
-                        setTimeout(() => {
-                            setActiveTab("account");
-                            speak("Finished reading applications. You are back in your account settings. Would you like to sign out?");
-                        }, 1000);
                     } else {
-                        speak("As an employer, you can check your job postings or applicants. Say 'postings' or 'applicants' to manage them.");
+                        speak("As an employer, you can check your postings. Say 'postings' to manage them.");
                     }
-                },
-                'account': () => {
-                    setActiveTab("account");
-                    speak("Switched to account details.");
-                },
-                'profile': () => { // Added 'profile' as an alias for 'account'
-                    setActiveTab("account");
-                    speak("Switched to account details.");
-                },
-                'postings': () => {
+                } else if (cmd === 'postings') {
                     if (user.role === 'employer') {
                         setActiveTab("postings");
                         speak(`Showing your ${myPostings.length} job postings.`);
-                    } else {
-                        speak("This command is only for employers.");
                     }
-                },
-                'applicants': () => {
+                } else if (cmd === 'applicants') {
                     if (user.role === 'employer') {
                         setActiveTab("applicants");
-                        speak(`Showing ${applicants.length} applicants for your jobs.`);
-                    } else {
-                        speak("This command is only for employers.");
+                        if (applicants.length === 0) {
+                            speak("You don't have any applicants yet.");
+                        } else {
+                            speak(`You have ${applicants.length} applicants. You can say 'view cv' for an applicant to see their profile.`);
+                        }
                     }
-                },
-                'home': () => {
-                    speak("Going back to the home page.");
-                    navigate('/');
+                } else if (cmd.includes('view cv')) {
+                    if (user.role === 'employer' && applicants.length > 0) {
+                        const app = applicants[0]; // Simplification for voice demo
+                        if (app.resume_url) {
+                            speak(`Opening the resume for ${app.applicantName}.`);
+                            window.open(app.resume_url, '_blank');
+                        } else {
+                            speak(`I'm sorry, no resume was found for ${app.applicantName}.`);
+                        }
+                    }
                 }
             };
 
-            const annyangLib = annyang as any;
-            if (annyangLib) {
-                annyangLib.addCommands(commands);
-                return () => annyangLib.removeCommands(Object.keys(commands));
+            window.addEventListener('voice-command', handleCommand);
+
+            if (activeTab === 'account') {
+                speak(`Welcome to your profile, ${user.name}. What would you like to do?`);
             }
+
+            return () => window.removeEventListener('voice-command', handleCommand);
         }
-    }, [isVoiceMode, user, applications, applicants, myPostings, activeTab]);
+    }, [isVoiceMode, isAwake, user, applications, applicants, myPostings, activeTab]);
 
     const handleUpdateStatus = (appId: string, newStatus: 'Accepted' | 'Rejected') => {
         // Update in all_applications (global list)
@@ -398,9 +380,13 @@ const Profile = () => {
                                                             <p className="text-sm font-semibold">{app.jobTitle}</p>
                                                         </div>
                                                         <div className="flex gap-2">
-                                                            {app.resume_url && (
-                                                                <Button variant="outline" size="sm" className="gap-2" onClick={() => window.open(app.resume_url, '_blank')}>
+                                                            {app.resume_url ? (
+                                                                <Button variant="outline" size="sm" className="gap-2 bg-primary/5 border-primary/20 hover:bg-primary/10 transition-colors" onClick={() => window.open(app.resume_url, '_blank')}>
                                                                     <ExternalLink className="h-4 w-4" /> View CV
+                                                                </Button>
+                                                            ) : (
+                                                                <Button variant="ghost" size="sm" className="gap-2 opacity-50 cursor-not-allowed">
+                                                                    <FileText className="h-4 w-4" /> No CV
                                                                 </Button>
                                                             )}
                                                             {app.status === 'Pending' ? (

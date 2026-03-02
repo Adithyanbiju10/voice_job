@@ -9,6 +9,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { useEffect } from 'react';
 import Navbar from "@/components/Navbar";
 import VoiceOverlay from "@/components/VoiceOverlay";
+import VisualCommandCenter from "@/components/VisualCommandCenter";
 import Index from "./pages/Index";
 import Jobs from "./pages/Jobs";
 import JobDetail from "./pages/JobDetail";
@@ -16,50 +17,12 @@ import About from "./pages/About";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
-import annyang from 'annyang';
 
 const GlobalVoiceController = () => {
-  const navigate = useNavigate();
-  const { isVoiceMode, speak, readPageContent } = useVoice();
-
-  useEffect(() => {
-    const annyangLib = annyang as any;
-    if (isVoiceMode && annyangLib) {
-      // Define the voice navigation commands
-      const commands = {
-        'go back': () => { speak('Going back'); navigate(-1); },
-        'go to home': () => { speak('Navigating home'); navigate('/'); },
-        'go home': () => { speak('Navigating home'); navigate('/'); },
-        'jobs': () => { speak('Navigating to jobs'); navigate('/jobs'); },
-        'go to jobs': () => { speak('Navigating to jobs'); navigate('/jobs'); },
-        'search for jobs': () => { speak('Navigating to jobs'); navigate('/jobs'); },
-        'about': () => { speak('Navigating to about page'); navigate('/about'); },
-        'go to profile': () => { speak('Navigating to profile'); navigate('/profile'); },
-        'go to login': () => { speak('Navigating to authentication page'); navigate('/auth'); },
-        'sign in': () => { speak('Navigating to sign in'); navigate('/auth'); },
-        'log in': () => { speak('Navigating to sign in'); navigate('/auth'); },
-        'sign up': () => { speak('Navigating to sign up'); navigate('/auth'); },
-        'register': () => { speak('Navigating to sign up'); navigate('/auth'); },
-        'create account': () => { speak('Navigating to sign up'); navigate('/auth'); },
-        'read this page': () => { readPageContent(); },
-        'read page': () => { readPageContent(); },
-        'stop speaking': () => { window.speechSynthesis.cancel(); }
-      };
-
-      // Add commands to annyang
-      annyangLib.addCommands(commands);
-
-      return () => {
-        if (annyangLib) {
-          annyangLib.removeCommands(Object.keys(commands));
-        }
-      };
-    }
-  }, [isVoiceMode, navigate, speak, readPageContent]);
-
   return (
     <>
       <VoiceOverlay />
+      <VisualCommandCenter />
       <Navbar />
       <Routes>
         <Route path="/" element={<Index />} />
