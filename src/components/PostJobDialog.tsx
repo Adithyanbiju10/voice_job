@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useVoice } from "@/contexts/VoiceContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { PlusCircle, Loader2 } from "lucide-react";
+import { PlusCircle, Loader2, ShieldAlert, Lock } from "lucide-react";
 import { saveLocalJob } from "@/utils/localJobs";
 
 const accessibilityOptions = [
@@ -35,8 +36,15 @@ const JOB_CATEGORIES = [
 
 export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
     const { user } = useAuth();
+    const { isVoiceMode, speak, isAwake } = useVoice();
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+
+    const titleRef = useRef<HTMLInputElement>(null);
+    const companyRef = useRef<HTMLInputElement>(null);
+    const locationRef = useRef<HTMLInputElement>(null);
+    const salaryRef = useRef<HTMLInputElement>(null);
+    const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
     const [formData, setFormData] = useState({
         title: "",
@@ -49,16 +57,41 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
         accessibility_features: [] as string[],
     });
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    // Voice Command Hub
+    useEffect(() => {
+        if (!isVoiceMode) return;
+
+        const handleVoiceCommand = (e: any) => {
+            if (e.detail === 'open-post-job') {
+                if (!user?.isVerified) {
+                    speak("You are not yet verified by the admin. Your account must be approved before you can post jobs. Please contact the platform administrator.");
+                    return;
+                }
+                setOpen(true);
+                speak("I've opened the job posting form for you. Please start by telling me the job title. You can say 'the title is Software Engineer' or any name.");
+                setTimeout(() => titleRef.current?.focus(), 500);
+            }
+        };
+
+        window.addEventListener('voice-command', handleVoiceCommand);
+        return () => window.removeEventListener('voice-command', handleVoiceCommand);
+    }, [isVoiceMode, speak, user]);
+
+    const handleSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         if (!user || user.role !== 'employer') {
             toast.error("Only employers can post jobs");
+            return;
+        }
+        if (!user.isVerified) {
+            toast.error("Your account is not verified. Please wait for admin approval before posting jobs.");
+            if (isVoiceMode) speak("You are not yet verified. Please contact the admin to get your account approved.");
             return;
         }
 
         setLoading(true);
 
-        // 1. ALWAYS Save locally first so it works even if Supabase is down
+        // 1. ALWAYS Save locally first
         try {
             saveLocalJob({
                 title: formData.title,
@@ -90,11 +123,8 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
                 is_active: true
             }]);
 
-            if (error) {
-                toast.success("Job published successfully!");
-            } else {
-                toast.success("Job published successfully!");
-            }
+            toast.success("Job published successfully!");
+            if (isVoiceMode) speak("Congratulations! Your job posting has been successfully published.");
 
             setOpen(false);
             onJobPosted();
@@ -130,6 +160,16 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
 
     if (!user || user.role !== 'employer') return null;
 
+    // If employer is not verified, show a locked state instead of the post button
+    if (!user.isVerified) {
+        return (
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-full border border-destructive/30 bg-destructive/5 text-destructive text-sm font-medium">
+                <Lock className="h-4 w-4 flex-shrink-0" />
+                <span>Posting locked — awaiting admin verification</span>
+            </div>
+        );
+    }
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -149,25 +189,73 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
                     <div className="space-y-4">
                         <div className="grid gap-2">
                             <Label htmlFor="title" className="font-semibold">Job Title</Label>
-                            <Input id="title" required value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} placeholder="e.g. Senior Frontend Engineer" />
+                            <Input
+                                id="title"
+                                required
+                                value={formData.title}
+                                ref={titleRef}
+                                onChange={e => setFormData({ ...formData, title: e.target.value })}
+                                onFocus={() => isVoiceMode && speak("Job Title. Tell me the role name.")}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        companyRef.current?.focus();
+                                        speak("Title set. Now, what is the company name?");
+                                    }
+                                }}
+                                placeholder="e.g. Senior Frontend Engineer"
+                            />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="company" className="font-semibold">Company</Label>
-                                <Input id="company" required value={formData.company} onChange={e => setFormData({ ...formData, company: e.target.value })} />
+                                <Input
+                                    id="company"
+                                    required
+                                    value={formData.company}
+                                    ref={companyRef}
+                                    onChange={e => setFormData({ ...formData, company: e.target.value })}
+                                    onFocus={() => isVoiceMode && speak("Company name.")}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            locationRef.current?.focus();
+                                            speak("Company set. Where is this job located?");
+                                        }
+                                    }}
+                                />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="location" className="font-semibold">Location</Label>
-                                <Input id="location" value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} placeholder="Remote or City" />
+                                <Input
+                                    id="location"
+                                    value={formData.location}
+                                    ref={locationRef}
+                                    onChange={e => setFormData({ ...formData, location: e.target.value })}
+                                    onFocus={() => isVoiceMode && speak("Location.")}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            salaryRef.current?.focus();
+                                            speak("Location set. What is the salary range?");
+                                        }
+                                    }}
+                                    placeholder="Remote or City"
+                                />
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="category" className="font-semibold">Category</Label>
-                                <Select value={formData.category} onValueChange={val => setFormData({ ...formData, category: val })}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                <Select value={formData.category} onValueChange={val => {
+                                    setFormData({ ...formData, category: val });
+                                    if (isVoiceMode) speak(`Category set to ${val}.`);
+                                }}>
+                                    <SelectTrigger onFocus={() => isVoiceMode && speak("Select Category. Use arrow keys to choose.")}>
+                                        <SelectValue />
+                                    </SelectTrigger>
                                     <SelectContent>
                                         {JOB_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                                     </SelectContent>
@@ -175,14 +263,43 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="salary" className="font-semibold">Salary</Label>
-                                <Input id="salary" value={formData.salary_range} onChange={e => setFormData({ ...formData, salary_range: e.target.value })} />
+                                <Input
+                                    id="salary"
+                                    value={formData.salary_range}
+                                    ref={salaryRef}
+                                    onChange={e => setFormData({ ...formData, salary_range: e.target.value })}
+                                    onFocus={() => isVoiceMode && speak("Salary range.")}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            descriptionRef.current?.focus();
+                                            speak("Salary set. Finally, give a brief description of the job duties.");
+                                        }
+                                    }}
+                                />
                             </div>
                         </div>
 
                         <div className="grid gap-2">
                             <Label htmlFor="description" className="font-semibold">Job Description</Label>
-                            <Textarea id="description" required value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="min-h-[100px]" />
+                            <Textarea
+                                id="description"
+                                required
+                                value={formData.description}
+                                ref={descriptionRef}
+                                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                onFocus={() => isVoiceMode && speak("Job description.")}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && e.ctrlKey) {
+                                        e.preventDefault();
+                                        handleSubmit();
+                                    }
+                                }}
+                                className="min-h-[100px]"
+                                placeholder="Describe the role... (Press Ctrl + Enter to publish)"
+                            />
                         </div>
+
 
                         <div className="space-y-3">
                             <Label className="text-sm font-semibold">Accessibility Features</Label>

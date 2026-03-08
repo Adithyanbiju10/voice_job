@@ -16,11 +16,14 @@ import JobDetail from "./pages/JobDetail";
 import About from "./pages/About";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import LoginNotifier from "@/components/LoginNotifier";
 
 const GlobalVoiceController = () => {
   return (
     <>
+      <LoginNotifier />
       <VoiceOverlay />
       <VisualCommandCenter />
       <Navbar />
@@ -31,6 +34,7 @@ const GlobalVoiceController = () => {
         <Route path="/about" element={<About />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </>

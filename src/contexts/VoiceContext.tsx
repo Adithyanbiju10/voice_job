@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import annyang from 'annyang';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface VoiceContextType {
   isVoiceMode: boolean;
@@ -29,7 +30,9 @@ export const useVoice = () => {
 };
 
 export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPrompting, setIsPrompting] = useState(false);
@@ -38,6 +41,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [lastHeard, setLastHeard] = useState("");
   const awakeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const speakingRef = useRef(false);
+  const isFirstVoiceActivationRef = useRef(false); // tracks first Enter-press activation
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -102,8 +106,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       speakingRef.current = true;
 
       const finishSpeaking = () => {
-        // Echo-cancellation delay: Wait 500ms before we allow the mic to process results again
-        // This ensures the "tail end" of the computer's speech doesn't get heard.
+        // Redced delay to 200ms to make it more responsive
         setTimeout(() => {
           setIsSpeaking(false);
           speakingRef.current = false;
@@ -111,7 +114,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             annyangLib.start({ autoRestart: true, continuous: false });
           }
           resolve();
-        }, 500);
+        }, 200);
+
       };
 
       utterance.onend = finishSpeaking;
@@ -269,15 +273,14 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return true;
     }
     if (matches(['sign in', 'login', 'log in', 'access my account'])) {
-      speak('Taking you to the sign in page.');
       navigate('/auth?mode=login');
       return true;
     }
     if (matches(['sign up', 'register', 'create account', 'join', 'signup'])) {
-      speak('Opening the registration page.');
       navigate('/auth?mode=signup');
       return true;
     }
+
 
     if (matches(['focus mode', 'high contrast', 'simplified', 'low vision', 'zoom', 'normal mode', 'standard mode', 'standard display', 'exit focus mode', 'reset view'])) {
       // If the user explicitly asks for 'normal' or 'standard', we force it to false.
@@ -321,6 +324,17 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       navigate(-1);
       return true;
     }
+    if (matches(['post a job', 'create a job', 'new job posting', 'add a job'])) {
+      if (user?.role === 'employer') {
+        speak('Opening the job creation form.');
+        window.dispatchEvent(new CustomEvent('voice-command', { detail: 'open-post-job' }));
+      } else {
+        speak('I am sorry, but only employers are allowed to post jobs on this platform.');
+      }
+      return true;
+    }
+
+
 
     // 4. Page Specific Actions (Context Aware)
     const path = location.pathname;
@@ -361,6 +375,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         window.dispatchEvent(new CustomEvent('voice-command', { detail: 'postings' }));
         return true;
       }
+
     }
 
     // C. AUTH PAGE LOGIC
@@ -381,7 +396,19 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         window.dispatchEvent(new CustomEvent('voice-command', { detail: 'select-blind' }));
         return true;
       }
+
+      if (matches(['yes', 'yeah', 'yup', 'i am', 'correct', 'definitely', 'yes i am', 'sure', 'affirmative'])) {
+        window.dispatchEvent(new CustomEvent('voice-command', { detail: 'select-blind' }));
+        return true;
+      }
+
+      if (matches(['no', 'nah', 'not really', 'i am not', 'negative', 'nope', 'never'])) {
+        speak('Understood. Are you a job seeker or an employer?');
+        return true;
+      }
+
     }
+
 
     // D. JOB DETAIL LOGIC
     if (path.startsWith('/jobs/')) {
@@ -507,8 +534,19 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (!isVoiceMode) return;
 
-    const pageName = location.pathname === '/' ? 'Home' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2);
     playCue('success');
+
+    // If this is the very first voice activation (user just pressed Enter),
+    // speak the welcome + wake-word message instead of the page heading.
+    if (isFirstVoiceActivationRef.current) {
+      isFirstVoiceActivationRef.current = false;
+      setTimeout(() => {
+        speak('Welcome to Ability Jobs. Please say Hey Ability to wake the voice assistant.');
+      }, 300);
+      return;
+    }
+
+    const pageName = location.pathname === '/' ? 'Home' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2);
 
     // Brief delay to allow page render
     setTimeout(() => {
@@ -605,12 +643,13 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (promptIntervalRef.current) clearInterval(promptIntervalRef.current);
           if (dismissalTimerRef.current) clearTimeout(dismissalTimerRef.current);
 
+          // Flag so the Page Transition effect speaks the welcome message instead of page heading
+          isFirstVoiceActivationRef.current = true;
           setIsVoiceMode(true);
           const annyangLib = annyang as any;
           if (annyangLib) {
             annyangLib.start({ autoRestart: true, continuous: true });
           }
-          speak('Voice mode enabled. I will now guide you through the website.');
           cleanup();
         } else if (e.key !== 'Tab') {
           dismissPrompt();

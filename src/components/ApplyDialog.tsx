@@ -32,23 +32,48 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [alreadyApplied, setAlreadyApplied] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submitButtonRef = useRef<HTMLButtonElement>(null);
   const successButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (open && isVoiceMode && isAwake && !success) {
-      if (user?.role === 'seeker') {
-        speak(`Applying for ${jobTitle}. First, please type a short pitch about yourself in the first field and press Enter.`);
-      } else {
-        speak(`You must be signed in as a job seeker to apply for this job.`);
-      }
-    }
-
     if (open && user?.role === 'seeker') {
       setName(user.name);
       setEmail(user.email);
+
+      // Check for duplicate application and retrieve its details
+      const existingApps = JSON.parse(localStorage.getItem('user_applications') || '[]');
+      const existingApp = existingApps.find(
+        (app: any) => app.jobId === jobId && app.applicantEmail === user.email
+      );
+      const duplicate = !!existingApp;
+      setAlreadyApplied(duplicate);
+
+      if (isVoiceMode && isAwake && !success) {
+        if (duplicate && existingApp) {
+          const appliedDate = new Date(existingApp.appliedAt).toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+          });
+          const statusMsg =
+            existingApp.status === 'Accepted'
+              ? 'Congratulations! Your application has been accepted.'
+              : existingApp.status === 'Rejected'
+                ? 'Unfortunately, your application was rejected.'
+                : 'Your application is currently pending review.';
+          speak(
+            `You have already applied for ${jobTitle}. ` +
+            `You applied on ${appliedDate}. ` +
+            `${statusMsg} ` +
+            `You cannot submit another application for this role.`
+          );
+        } else {
+          speak(`Applying for ${jobTitle}. First, please type a short pitch about yourself in the first field and press Enter.`);
+        }
+      }
+    } else if (open && isVoiceMode && isAwake && !success) {
+      speak(`You must be signed in as a job seeker to apply for this job.`);
     }
   }, [open, user]);
 
@@ -123,6 +148,18 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
   };
 
   const handleSubmit = async () => {
+    // Guard: prevent duplicate applications
+    const existingApps = JSON.parse(localStorage.getItem('user_applications') || '[]');
+    const duplicate = existingApps.some(
+      (app: any) => app.jobId === jobId && app.applicantEmail === email
+    );
+    if (duplicate) {
+      toast({ title: 'Already applied', description: `You have already applied for ${jobTitle}.`, variant: 'destructive' });
+      if (isVoiceMode) speak(`You have already applied for ${jobTitle}. Duplicate applications are not allowed.`);
+      setAlreadyApplied(true);
+      return;
+    }
+
     if (!file) {
       toast({ title: 'Please upload your resume', variant: 'destructive' });
       if (isVoiceMode) speak('Please upload your resume to continue.');
@@ -177,6 +214,20 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
         resumeUrl = 'https://example.com/mock-resume-fallback.pdf';
       }
 
+      // Also store file as base64 data URI so employers can open it directly (works offline/demo)
+      let resumeData: string | null = null;
+      const resumeFilename: string = file.name;
+      try {
+        resumeData = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      } catch {
+        console.warn('Could not read file as base64.');
+      }
+
       // Save application to localStorage for Profile visibility
       const applicationData = {
         id: crypto.randomUUID(),
@@ -188,7 +239,9 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
         coverLetter: coverLetter,
         appliedAt: new Date().toISOString(),
         status: 'Pending',
-        resume_url: resumeUrl
+        resume_url: resumeUrl,
+        resume_data: resumeData,
+        resume_filename: resumeFilename,
       };
 
       const existingApps = JSON.parse(localStorage.getItem('user_applications') || '[]');
@@ -221,7 +274,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
   const handleClose = (v: boolean) => {
     if (!v) {
       setTimeout(() => {
-        setCoverLetter(''); setFile(null); setSuccess(false);
+        setCoverLetter(''); setFile(null); setSuccess(false); setAlreadyApplied(false);
       }, 300);
     }
     onOpenChange(v);
@@ -343,15 +396,22 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
                 </div>
 
                 <div className="pt-4">
-                  <Button
-                    ref={submitButtonRef}
-                    onClick={handleSubmit}
-                    className="w-full rounded-xl h-12 shadow-lg shadow-primary/20 bg-gradient-to-r from-primary to-accent hover:opacity-90 active:scale-95 transition-all"
-                    disabled={loading}
-                  >
-                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                    Send Application
-                  </Button>
+                  {alreadyApplied ? (
+                    <div className="w-full rounded-xl h-12 flex items-center justify-center gap-2 bg-muted/60 border border-border/50 text-muted-foreground text-sm font-semibold cursor-not-allowed">
+                      <CheckCircle className="h-4 w-4 text-success" />
+                      Already Applied
+                    </div>
+                  ) : (
+                    <Button
+                      ref={submitButtonRef}
+                      onClick={handleSubmit}
+                      className="w-full rounded-xl h-12 shadow-lg shadow-primary/20 bg-gradient-to-r from-primary to-accent hover:opacity-90 active:scale-95 transition-all"
+                      disabled={loading}
+                    >
+                      {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                      Send Application
+                    </Button>
+                  )}
                 </div>
               </motion.div>
             )}

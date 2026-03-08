@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { MapPin, Clock, IndianRupee, Accessibility, ArrowRight } from 'lucide-react';
+import { MapPin, Clock, IndianRupee, Accessibility, ArrowRight, CheckCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import type { Tables } from '@/integrations/supabase/types';
@@ -10,6 +10,13 @@ interface JobCardProps {
 }
 
 const JobCard = ({ job, index = 0 }: JobCardProps) => {
+  // Check if the employer who posted this job is verified
+  const isVerifiedEmployer = (() => {
+    try {
+      const users = JSON.parse(localStorage.getItem('ability_jobs_registered_users') || '[]');
+      return users.some((u: any) => u.role === 'employer' && u.name === job.company && u.isVerified === true);
+    } catch { return false; }
+  })();
   return (
     <Link to={`/jobs/${job.id}`} aria-label={`View ${job.title} at ${job.company}`}>
       <Card className="group cursor-pointer relative overflow-hidden border-border/50 bg-card/60 backdrop-blur-md transition-all duration-300 hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1 hover:border-primary/30"
@@ -22,6 +29,11 @@ const JobCard = ({ job, index = 0 }: JobCardProps) => {
               <div className="flex items-center gap-2 mb-2">
                 <Badge className="text-[10px] uppercase tracking-wider bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">{job.category}</Badge>
                 <Badge variant="outline" className="text-[10px] uppercase tracking-wider border-accent/30 text-accent-foreground">{job.job_type}</Badge>
+                {isVerifiedEmployer && (
+                  <Badge className="text-[10px] tracking-wider bg-success/15 text-success border-success/30 border gap-1">
+                    <CheckCircle className="h-2.5 w-2.5" /> Verified
+                  </Badge>
+                )}
               </div>
               <h3 className="font-heading text-xl font-bold text-foreground group-hover:text-primary transition-colors truncate">
                 {job.title}

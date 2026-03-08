@@ -20,7 +20,8 @@ const Auth = () => {
     const [searchParams] = useSearchParams();
     const mode = searchParams.get('mode');
     const [activeTab, setActiveTab] = useState(mode === "signup" ? "signup" : "login");
-    const { isVoiceMode, speak, isAwake } = useVoice();
+    const { isVoiceMode, speak, isAwake, setIsAwake } = useVoice();
+
     const { login, signup } = useAuth();
     const navigate = useNavigate();
     const { toast } = useToast();
@@ -76,19 +77,37 @@ const Auth = () => {
                     setActiveTab("signup");
                     setDisability('blind');
                     setRole('seeker');
-                    speak("Activating accessibility mode for visually impaired. I'll read everything aloud for you. Setting your role to job seeker.");
+                    speak("Confirmed. I have enabled accessibility mode. Please tell me your full name.");
+                    setTimeout(() => {
+                        nameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        focusWithPulse(nameRef);
+                    }, 1000);
                 }
+
+
             };
 
             window.addEventListener('voice-command', handleCommand);
 
             if (lastPromptedTab.current !== activeTab) {
-                const initialPrompt = activeTab === "login"
-                    ? "Welcome back. Log in or say 'go to sign up' to create an account."
-                    : "Welcome. Are you a job seeker or an employer? Just tell me what you're looking for.";
-                speak(initialPrompt);
+                if (activeTab === "login") {
+                    // Tell the user to enter their email and focus the field automatically
+                    setTimeout(() => {
+                        speak("Welcome back. Please enter your email address to sign in. If you want to create a new account, say sign up.");
+                        setIsAwake(true);
+                        setTimeout(() => focusWithPulse(loginEmailRef), 600);
+                    }, 800);
+                } else {
+                    setTimeout(() => {
+                        speak("Welcome to our platform. Before we begin, are you visually impaired? Please say yes or no.");
+                        setIsAwake(true);
+                    }, 800);
+                }
+
                 lastPromptedTab.current = activeTab;
             }
+
+
 
             return () => window.removeEventListener('voice-command', handleCommand);
         }
@@ -142,14 +161,18 @@ const Auth = () => {
 
             if (success) {
                 setIsLoading(false);
+                // Detect if admin just logged in
+                const stored = localStorage.getItem('ability_jobs_user');
+                const loggedInUser = stored ? JSON.parse(stored) : null;
+                const isAdmin = loggedInUser?.role === 'admin';
                 toast({
-                    title: "Welcome back!",
-                    description: "You have successfully signed in.",
+                    title: isAdmin ? "Welcome, Admin!" : "Welcome back!",
+                    description: isAdmin ? "Redirecting to admin dashboard." : "You have successfully signed in.",
                 });
                 if (isVoiceMode) {
-                    speak(`Welcome back! Redirecting to home page.`);
+                    speak(isAdmin ? `Welcome Admin. Redirecting to admin dashboard.` : `Welcome back! Redirecting to home page.`);
                 }
-                navigate("/");
+                navigate(isAdmin ? "/admin" : "/");
             } else {
                 // For demo/UX: If user not found, let's create it on the fly if it looks like a demo user
                 // but better practice is to inform them or use a default one
@@ -207,7 +230,7 @@ const Auth = () => {
 
     return (
         <main className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 md:p-8 relative overflow-hidden">
-            <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] opacity-60 pointer-events-none" />
+            <div className="absolute top-1/4 left-1/4 -translate-y-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] opacity-60 pointer-events-none" />
             <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-accent/20 rounded-full blur-[80px] opacity-40 pointer-events-none" />
 
             <div className="w-full max-w-md relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -344,17 +367,18 @@ const Auth = () => {
                                             </button>
                                             <button
                                                 type="button"
-                                                disabled={disability === 'blind'}
+                                                disabled={disability !== 'none'}
                                                 onFocus={() => isVoiceMode && speak(`Role: Employer. ${role === 'employer' ? 'Currently selected.' : 'Select this if you want to post jobs and hire.'}`)}
                                                 onClick={() => setRole("employer")}
                                                 className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${role === "employer"
                                                     ? "border-accent bg-accent/5 text-accent-foreground"
                                                     : "border-border/50 bg-background/50 text-muted-foreground hover:border-accent/30"
-                                                    } ${disability === 'blind' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    } ${disability !== 'none' ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             >
                                                 <Building className="h-6 w-6 mb-2" />
                                                 <span className="font-medium text-sm">Employer</span>
                                             </button>
+
                                         </div>
                                     </div>
 

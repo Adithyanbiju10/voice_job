@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Briefcase, Home, Info, Mic, MicOff, Moon, Sun, Menu, X } from 'lucide-react';
+import { Briefcase, Home, Info, Mic, MicOff, Moon, Sun, Menu, X, Shield } from 'lucide-react';
 import { useVoice } from '@/contexts/VoiceContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -81,11 +81,20 @@ const Navbar = () => {
           </Button>
 
           {user ? (
-            <Button asChild variant="ghost" size="icon" className="hidden sm:inline-flex rounded-full border border-border/50 bg-background/50 hover:bg-secondary">
-              <Link to="/profile" aria-label="My Profile">
-                <User className="h-5 w-5 text-primary" />
-              </Link>
-            </Button>
+            user.role === 'admin' ? (
+              <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex gap-2 rounded-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 px-4">
+                <Link to="/admin" aria-label="Admin Dashboard">
+                  <Shield className="h-4 w-4" />
+                  Admin
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="ghost" size="icon" className="hidden sm:inline-flex rounded-full border border-border/50 bg-background/50 hover:bg-secondary">
+                <Link to="/profile" aria-label="My Profile">
+                  <User className="h-5 w-5 text-primary" />
+                </Link>
+              </Button>
+            )
           ) : (
             <Button asChild variant="default" className="hidden sm:flex rounded-full px-6 shadow-md shadow-primary/20 hover:shadow-primary/40 transition-all hover:-translate-y-0.5">
               <Link to="/auth">Sign In</Link>
@@ -123,11 +132,19 @@ const Navbar = () => {
                   <p className="font-medium text-sm text-foreground">{user.name}</p>
                   <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
-                <Button asChild variant="outline" className="w-full rounded-lg justify-start">
-                  <Link to="/profile" onClick={() => setMobileOpen(false)}>
-                    <User className="mr-2 h-4 w-4" /> My Profile
-                  </Link>
-                </Button>
+                {user.role === 'admin' ? (
+                  <Button asChild variant="outline" className="w-full rounded-lg justify-start">
+                    <Link to="/admin" onClick={() => setMobileOpen(false)}>
+                      <Shield className="mr-2 h-4 w-4 text-primary" /> Admin Dashboard
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button asChild variant="outline" className="w-full rounded-lg justify-start">
+                    <Link to="/profile" onClick={() => setMobileOpen(false)}>
+                      <User className="mr-2 h-4 w-4" /> My Profile
+                    </Link>
+                  </Button>
+                )}
                 <Button variant="ghost" className="w-full rounded-lg justify-start text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { logout(); setMobileOpen(false); }}>
                   Sign Out
                 </Button>

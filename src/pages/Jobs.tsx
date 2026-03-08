@@ -88,13 +88,13 @@ const Jobs = () => {
 
   const navigate = useNavigate();
 
+  // Holds jobs waiting for disambiguation (user said a title matched by multiple companies)
+  const [pendingMatches, setPendingMatches] = useState<typeof filtered>([]);
+
   useEffect(() => {
     let isAborted = false;
 
     const handleCommand = (e: any) => {
-      if (e.detail === 'next') {
-        // Skipping wait is handled by checking isAborted
-      }
       if (e.detail === 'stop') {
         isAborted = true;
         window.speechSynthesis.cancel();
@@ -105,39 +105,120 @@ const Jobs = () => {
       setSearch(e.detail);
     };
 
-    // New: Handle raw voice input for flexible matching
-    const handleVoiceInput = (e: any) => {
+    // Smart voice input handler — handles both title selection and disambiguation
+    const handleVoiceInput = async (e: any) => {
       const text = e.detail.toLowerCase().trim();
-      // Try to match a job title from the current filtered list
-      const matchedJob = filtered.find(j =>
+
+      // ── DISAMBIGUATION MODE: user is picking from a numbered list ──
+      // Check if there are pending matches waiting for a choice
+      const currentPending = (window as any).__pendingVoiceMatches as typeof filtered | undefined;
+      if (currentPending && currentPending.length > 0) {
+        // Try to match by number ("one", "1", "two", "2", etc.)
+        const numberWords: Record<string, number> = {
+          'one': 1, 'first': 1, '1': 1,
+          'two': 2, 'second': 2, '2': 2,
+          'three': 3, 'third': 3, '3': 3,
+          'four': 4, 'fourth': 4, '4': 4,
+          'five': 5, 'fifth': 5, '5': 5,
+          'six': 6, '6': 6, 'seven': 7, '7': 7,
+          'eight': 8, '8': 8, 'nine': 9, '9': 9, 'ten': 10, '10': 10,
+        };
+
+        let chosenJob: (typeof filtered)[0] | undefined;
+
+        // Match by spoken number
+        for (const [word, num] of Object.entries(numberWords)) {
+          if (text.includes(word)) {
+            const idx = num - 1;
+            if (idx >= 0 && idx < currentPending.length) {
+              chosenJob = currentPending[idx];
+              break;
+            }
+          }
+        }
+
+        // Match by company name if no number found
+        if (!chosenJob) {
+          chosenJob = currentPending.find(j =>
+            text.includes(j.company.toLowerCase()) ||
+            j.company.toLowerCase().includes(text)
+          );
+        }
+
+        if (chosenJob) {
+          (window as any).__pendingVoiceMatches = null;
+          window.speechSynthesis.cancel();
+          speak(`Opening ${chosenJob.title} at ${chosenJob.company}.`);
+          navigate(`/jobs/${chosenJob.id}`);
+          return;
+        } else {
+          speak('Sorry, I did not catch that. Please say a number or the company name to choose a job.');
+          return;
+        }
+      }
+
+      // ── NORMAL MODE: user says a job title ──
+      const matches = filtered.filter(j =>
         text.includes(j.title.toLowerCase()) ||
-        j.title.toLowerCase().includes(text)
+        j.title.toLowerCase().split(' ').some(word => word.length > 3 && text.includes(word))
       );
 
-      if (matchedJob) {
+      if (matches.length === 0) return; // Not a job title — let universal command handler deal with it
+
+      // ── PRIORITY CHECK: title + company name spoken together → open directly ──
+      // e.g. "Software Engineer at TechCorp" or "TechCorp Software Engineer"
+      const exactMatch = matches.find(j =>
+        text.includes(j.company.toLowerCase()) ||
+        j.company.toLowerCase().split(' ').some(word => word.length > 2 && text.includes(word))
+      );
+
+      if (exactMatch) {
+        // User named both the title and the company — open it without asking
         isAborted = true;
         window.speechSynthesis.cancel();
-        speak(`Opening ${matchedJob.title}`);
-        navigate(`/jobs/${matchedJob.id}`);
+        speak(`Opening ${exactMatch.title} at ${exactMatch.company}.`);
+        navigate(`/jobs/${exactMatch.id}`);
+        return;
+      }
+
+      if (matches.length === 1) {
+        // Only one match — open it immediately
+        isAborted = true;
+        window.speechSynthesis.cancel();
+        speak(`Opening ${matches[0].title} at ${matches[0].company}.`);
+        navigate(`/jobs/${matches[0].id}`);
+      } else {
+        // Multiple companies share this title — announce and ask user to choose
+        isAborted = true;
+        window.speechSynthesis.cancel();
+        (window as any).__pendingVoiceMatches = matches;
+
+        let announcement = `I found ${matches.length} jobs with that title from different companies. `;
+        matches.forEach((job, idx) => {
+          announcement += `Option ${idx + 1}: ${job.title} at ${job.company}. `;
+        });
+        announcement += 'Please say a number or the company name to open the one you want.';
+
+        speak(announcement);
       }
     };
 
     if (isVoiceMode && isAwake && !loading) {
-      if (filtered.length > 0) {
-        window.addEventListener('voice-command', handleCommand);
-        window.addEventListener('voice-search', handleSearch);
-        window.addEventListener('voice-input', handleVoiceInput);
+      // Clear any leftover pending matches when the page re-activates
+      (window as any).__pendingVoiceMatches = null;
 
+      window.addEventListener('voice-command', handleCommand);
+      window.addEventListener('voice-search', handleSearch);
+      window.addEventListener('voice-input', handleVoiceInput);
+
+      if (filtered.length > 0) {
         const readJobs = async () => {
           await speak(`I found ${filtered.length} jobs. Say a job title anytime to open it, or "next" to continue.`);
 
           for (let i = 0; i < filtered.length; i++) {
             if (isAborted) break;
             const job = filtered[i];
-
             await speak(`${job.title} at ${job.company}.`);
-
-            // Wait for reaction/next
             for (let j = 0; j < 30; j++) {
               if (isAborted) break;
               await new Promise(r => setTimeout(r, 100));
@@ -153,11 +234,13 @@ const Jobs = () => {
     return () => {
       isAborted = true;
       window.speechSynthesis.cancel();
+      (window as any).__pendingVoiceMatches = null;
       window.removeEventListener('voice-command', handleCommand);
       window.removeEventListener('voice-search', handleSearch);
       window.removeEventListener('voice-input', handleVoiceInput);
     };
   }, [isVoiceMode, isAwake, loading, filtered.length, navigate]);
+
 
   return (
     <main className="container py-8 md:py-12">

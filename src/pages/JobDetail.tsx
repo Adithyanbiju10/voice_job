@@ -13,12 +13,16 @@ import { getLocalJobs } from '@/utils/localJobs';
 import type { Tables } from '@/integrations/supabase/types';
 import annyang from 'annyang';
 
+import { CheckCircle } from 'lucide-react';
+
 const JobDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [job, setJob] = useState<Tables<'jobs'> | null>(null);
   const [loading, setLoading] = useState(true);
   const [applyOpen, setApplyOpen] = useState(false);
+  const [alreadyApplied, setAlreadyApplied] = useState(false);
+  const [existingApplication, setExistingApplication] = useState<any>(null);
   const { isVoiceMode, speak, listen, isAwake } = useVoice();
   const { user } = useAuth();
 
@@ -45,10 +49,20 @@ const JobDetail = () => {
         }
       }
 
+      // Check if the current user has already applied
+      if (user?.role === 'seeker') {
+        const apps = JSON.parse(localStorage.getItem('user_applications') || '[]');
+        const existing = apps.find((app: any) => app.jobId === id && app.applicantEmail === user.email);
+        if (existing) {
+          setAlreadyApplied(true);
+          setExistingApplication(existing);
+        }
+      }
+
       setLoading(false);
     };
     fetch();
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => {
     if (isVoiceMode && isAwake && job) {
@@ -57,8 +71,21 @@ const JobDetail = () => {
           speak('You need to sign in to apply. Opening the login prompt.');
           setApplyOpen(true);
         } else if (user.role === 'seeker') {
-          speak('Opening the application form.');
-          setApplyOpen(true);
+          if (alreadyApplied && existingApplication) {
+            const appliedDate = new Date(existingApplication.appliedAt).toLocaleDateString('en-US', {
+              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+            });
+            const statusMsg =
+              existingApplication.status === 'Accepted'
+                ? 'Congratulations! It has been accepted.'
+                : existingApplication.status === 'Rejected'
+                  ? 'Unfortunately, it was rejected.'
+                  : 'It is currently pending review.';
+            speak(`You have already applied for ${job.title} on ${appliedDate}. ${statusMsg} You cannot apply again.`);
+          } else {
+            speak('Opening the application form.');
+            setApplyOpen(true);
+          }
         } else {
           speak('Only job seekers can apply for jobs.');
         }
@@ -80,7 +107,23 @@ const JobDetail = () => {
           accessibilityInfo = `This workplace includes accessibility features such as: ${job.accessibility_features.join(', ')}. `;
         }
 
-        await speak(`Description: ${job.description}. ${accessibilityInfo} Say 'apply' at any time to start your application.`);
+        if (alreadyApplied && existingApplication) {
+          const appliedDate = new Date(existingApplication.appliedAt).toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+          });
+          const statusMsg =
+            existingApplication.status === 'Accepted'
+              ? 'Congratulations! Your application has been accepted.'
+              : existingApplication.status === 'Rejected'
+                ? 'Unfortunately, your application was rejected.'
+                : 'Your application is currently pending review.';
+          await speak(
+            `Description: ${job.description}. ${accessibilityInfo}` +
+            `Note: You have already applied for this job on ${appliedDate}. ${statusMsg}`
+          );
+        } else {
+          await speak(`Description: ${job.description}. ${accessibilityInfo} Say 'apply' at any time to start your application.`);
+        }
       };
 
       readJobDetails();
@@ -90,7 +133,7 @@ const JobDetail = () => {
         window.speechSynthesis.cancel();
       };
     }
-  }, [isVoiceMode, isAwake, job, user]);
+  }, [isVoiceMode, isAwake, job, user, alreadyApplied, existingApplication]);
 
   if (loading) {
     return (
@@ -133,9 +176,27 @@ const JobDetail = () => {
       </div>
 
       {(!user || user.role === 'seeker') && (
-        <Button size="lg" className="mb-8 w-full sm:w-auto text-base px-8 shadow-lg shadow-primary/20" onClick={() => setApplyOpen(true)}>
-          <Briefcase className="mr-2 h-4 w-4" /> Apply Now
-        </Button>
+        alreadyApplied && existingApplication ? (
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-2 px-5 py-3 rounded-xl bg-success/10 border border-success/30 text-success font-semibold text-sm w-full sm:w-auto">
+              <CheckCircle className="h-5 w-5 flex-shrink-0" />
+              Already Applied
+            </div>
+            <span className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider ${existingApplication.status === 'Accepted' ? 'bg-success/20 text-success' :
+                existingApplication.status === 'Rejected' ? 'bg-destructive/20 text-destructive' :
+                  'bg-primary/10 text-primary'
+              }`}>
+              Status: {existingApplication.status}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Applied on {new Date(existingApplication.appliedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </span>
+          </div>
+        ) : (
+          <Button size="lg" className="mb-8 w-full sm:w-auto text-base px-8 shadow-lg shadow-primary/20" onClick={() => setApplyOpen(true)}>
+            <Briefcase className="mr-2 h-4 w-4" /> Apply Now
+          </Button>
+        )
       )}
 
       {user?.role === 'employer' && (
