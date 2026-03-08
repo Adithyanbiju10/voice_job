@@ -136,6 +136,26 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
       speak("Pitch entered. Now, please upload your resume by clicking the upload button.");
       fileInputRef.current?.click();
     }
+    speakCharacter(e);
+  };
+
+  // Speaks each character aloud for visually impaired users
+  const speakCharacter = (e: React.KeyboardEvent) => {
+    if (!isVoiceMode) return;
+    const key = e.key;
+    if (key.length > 1 && key !== 'Backspace' && key !== 'Space' && key !== 'Enter') return;
+    if (key === 'Backspace') { speak('deleted'); return; }
+    if (key === 'Enter') return;
+    const specialMap: Record<string, string> = {
+      ' ': 'space', '@': 'at sign', '.': 'dot', ',': 'comma',
+      '-': 'dash', '_': 'underscore', '+': 'plus', '=': 'equals',
+      '!': 'exclamation mark', '?': 'question mark', '#': 'hash',
+      '$': 'dollar', '%': 'percent', '^': 'caret', '&': 'ampersand',
+      '*': 'asterisk', '(': 'open parenthesis', ')': 'close parenthesis',
+      '/': 'slash', '\\': 'backslash', ':': 'colon', ';': 'semicolon',
+      "'": 'apostrophe', '"': 'quote',
+    };
+    speak(specialMap[key] ?? key);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,6 +383,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
                       value={coverLetter}
                       onChange={e => setCoverLetter(e.target.value)}
                       onKeyDown={handlePitchKeyDown}
+                      onFocus={() => isVoiceMode && speak('Pitch yourself field. Each character you type will be read aloud. Press Enter when done.')}
                       placeholder="What makes you a perfect fit?"
                       rows={4}
                       className="bg-secondary/30 border-primary/10 focus:border-primary/50 transition-all rounded-xl resize-none"

@@ -16,12 +16,22 @@ interface AuthContextType {
     isAuthenticated: boolean;
     isLoading: boolean;
     login: (email: string, password?: string) => boolean;
-    signup: (userData: Omit<User, 'id'>) => void;
+    signup: (userData: Omit<User, 'id'>, password?: string) => void;
     logout: () => void;
     verifyEmployer: (employerId: string) => void;
     unverifyEmployer: (employerId: string) => void;
     getAllEmployers: () => User[];
 }
+
+// A simple deterministic hash — good enough for a localStorage-backed demo.
+// NOT cryptographically secure; for a real app use bcrypt on the server.
+const hashPassword = (pwd: string): string => {
+    let hash = 0;
+    for (let i = 0; i < pwd.length; i++) {
+        hash = (Math.imul(31, hash) + pwd.charCodeAt(i)) | 0;
+    }
+    return hash.toString(16);
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -40,21 +50,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         }
 
-        // Seed demo users if first time
+        // Seed demo users with known passwords if first time
         const registeredUsers = localStorage.getItem('ability_jobs_registered_users');
         if (!registeredUsers) {
             const demoUsers = [
-                { id: '1', name: 'Job Seeker', email: 'user@example.com', role: 'seeker' as Role, disability: 'none', isVerified: false },
-                { id: '2', name: 'TechCorp', email: 'employer@example.com', role: 'employer' as Role, disability: 'none', isVerified: false },
-                { id: 'admin-001', name: 'Platform Admin', email: 'admin@abilityjobs.com', role: 'admin' as Role, disability: 'none', isVerified: true }
+                { id: '1', name: 'Job Seeker', email: 'user@example.com', role: 'seeker' as Role, disability: 'none', isVerified: false, password: hashPassword('password123') },
+                { id: '2', name: 'TechCorp', email: 'employer@example.com', role: 'employer' as Role, disability: 'none', isVerified: false, password: hashPassword('password123') },
+                { id: 'admin-001', name: 'Platform Admin', email: 'admin@abilityjobs.com', role: 'admin' as Role, disability: 'none', isVerified: true, password: hashPassword('admin123') }
             ];
             localStorage.setItem('ability_jobs_registered_users', JSON.stringify(demoUsers));
         } else {
-            // Ensure admin always exists even in older saved data
-            const parsed: User[] = JSON.parse(registeredUsers);
+            // Migrate existing users: ensure every record has a password and admin always exists
+            const parsed: any[] = JSON.parse(registeredUsers);
+            let changed = false;
+
+            // Ensure admin exists
             if (!parsed.find(u => u.role === 'admin')) {
-                parsed.push({ id: 'admin-001', name: 'Platform Admin', email: 'admin@abilityjobs.com', role: 'admin' as Role, disability: 'none', isVerified: true });
-                localStorage.setItem('ability_jobs_registered_users', JSON.stringify(parsed));
+                parsed.push({ id: 'admin-001', name: 'Platform Admin', email: 'admin@abilityjobs.com', role: 'admin' as Role, disability: 'none', isVerified: true, password: hashPassword('admin123') });
+                changed = true;
+            }
+
+            // Give any user without a password the default password 'password123'
+            const migrated = parsed.map(u => {
+                if (!u.password) {
+                    changed = true;
+                    // Admin gets its own default
+                    const defaultPwd = u.role === 'admin' ? 'admin123' : 'password123';
+                    return { ...u, password: hashPassword(defaultPwd) };
+                }
+                return u;
+            });
+
+            if (changed) {
+                localStorage.setItem('ability_jobs_registered_users', JSON.stringify(migrated));
             }
         }
 
@@ -107,47 +135,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const users = getUsers();
         const foundUser = users.find(u => u.email.toLowerCase() === cleanEmail);
 
-        if (foundUser) {
-            const { password: _, ...userWithoutPassword } = foundUser;
-            setUser(userWithoutPassword as User);
-            localStorage.setItem('ability_jobs_user', JSON.stringify(userWithoutPassword));
-            return true;
-        } else {
-            // "Magic Login": If user not found, create a default profile so they are "remembered"
-            const baseName = cleanEmail.split('@')[0] || 'User';
-            const name = baseName.charAt(0).toUpperCase() + baseName.slice(1);
-
-            const newUser: User = {
-                id: Math.random().toString(36).substr(2, 9),
-                name,
-                email: cleanEmail,
-                role: 'seeker',
-                disability: 'none'
-            };
-
-            const updatedUsers = [...users, newUser];
-            localStorage.setItem('ability_jobs_registered_users', JSON.stringify(updatedUsers));
-
-            setUser(newUser);
-            localStorage.setItem('ability_jobs_user', JSON.stringify(newUser));
-            return true;
+        if (!foundUser) {
+            // User does not exist — reject login
+            return false;
         }
+
+        // Validate password if the stored record has one
+        if (foundUser.password) {
+            const incoming = hashPassword(password || '');
+            if (incoming !== foundUser.password) {
+                return false; // Wrong password
+            }
+        }
+
+        const { password: _, ...userWithoutPassword } = foundUser;
+        setUser(userWithoutPassword as User);
+        localStorage.setItem('ability_jobs_user', JSON.stringify(userWithoutPassword));
+        return true;
     };
 
-    const signup = (userData: Omit<User, 'id'>) => {
+    const signup = (userData: Omit<User, 'id'>, password?: string) => {
         const users = getUsers();
-        const newUser: User = {
+        const newUser = {
             ...userData,
             id: Math.random().toString(36).substr(2, 9),
+            ...(password ? { password: hashPassword(password) } : {}),
         };
 
         // Save to registered users list
         const updatedUsers = [...users, newUser];
         localStorage.setItem('ability_jobs_registered_users', JSON.stringify(updatedUsers));
 
-        // Set as current user
-        setUser(newUser);
-        localStorage.setItem('ability_jobs_user', JSON.stringify(newUser));
+        // Set as current user (without password in session)
+        const { password: _, ...userWithoutPassword } = newUser;
+        setUser(userWithoutPassword as User);
+        localStorage.setItem('ability_jobs_user', JSON.stringify(userWithoutPassword));
     };
 
     const logout = () => {

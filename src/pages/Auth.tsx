@@ -47,6 +47,53 @@ const Auth = () => {
         }
     };
 
+    // Speaks each character aloud for visually impaired users.
+    const speakCharacter = (e: React.KeyboardEvent) => {
+        if (!isVoiceMode) return;
+
+        const key = e.key;
+
+        // Ignore modifier-only keys and function keys
+        if (key.length > 1 && key !== 'Backspace' && key !== 'Space' && key !== 'Enter') return;
+
+        if (key === 'Backspace') {
+            speak('deleted');
+            return;
+        }
+        if (key === 'Enter') return; // handled separately
+
+        // Map special characters to spoken names
+        const specialMap: Record<string, string> = {
+            ' ': 'space',
+            '@': 'at sign',
+            '.': 'dot',
+            ',': 'comma',
+            '-': 'dash',
+            '_': 'underscore',
+            '+': 'plus',
+            '=': 'equals',
+            '!': 'exclamation mark',
+            '?': 'question mark',
+            '#': 'hash',
+            '$': 'dollar',
+            '%': 'percent',
+            '^': 'caret',
+            '&': 'ampersand',
+            '*': 'asterisk',
+            '(': 'open parenthesis',
+            ')': 'close parenthesis',
+            '/': 'slash',
+            '\\': 'backslash',
+            ':': 'colon',
+            ';': 'semicolon',
+            "'": 'apostrophe',
+            '"': 'quote',
+        };
+
+        const toSpeak = specialMap[key] ?? key;
+        speak(toSpeak);
+    };
+
     useEffect(() => {
         if (activeTab === "login") {
             setTimeout(() => focusWithPulse(loginEmailRef), 400);
@@ -174,30 +221,24 @@ const Auth = () => {
                 }
                 navigate(isAdmin ? "/admin" : "/");
             } else {
-                // For demo/UX: If user not found, let's create it on the fly if it looks like a demo user
-                // but better practice is to inform them or use a default one
-                if (email === 'user@example.com' || email === 'employer@example.com') {
-                    const mockUser = {
-                        name: email === 'user@example.com' ? 'Job Seeker' : 'TechCorp',
-                        email,
-                        role: email === 'user@example.com' ? 'seeker' as const : 'employer' as const,
-                        disability: 'none'
-                    };
-                    signup(mockUser);
-                    setIsLoading(false);
+                setIsLoading(false);
+                // Distinguish between unknown email and wrong password
+                const allUsers: any[] = JSON.parse(localStorage.getItem('ability_jobs_registered_users') || '[]');
+                const emailExists = allUsers.some((u: any) => u.email.toLowerCase() === email.toLowerCase());
+                if (emailExists) {
                     toast({
-                        title: "Welcome!",
-                        description: "Logged in with demo account.",
-                    });
-                    navigate("/");
-                } else {
-                    setIsLoading(false);
-                    toast({
-                        title: "Login failed",
-                        description: "I haven't seen you before. Please use 'Sign Up' if this is your first time!",
+                        title: "Incorrect password",
+                        description: "The password you entered is wrong. Please try again.",
                         variant: "destructive"
                     });
-                    if (isVoiceMode) speak("I couldn't find your account. Would you like to sign up instead?");
+                    if (isVoiceMode) speak("The password you entered is incorrect. Please try again.");
+                } else {
+                    toast({
+                        title: "Account not found",
+                        description: "No account with that email exists. Please sign up first.",
+                        variant: "destructive"
+                    });
+                    if (isVoiceMode) speak("I couldn't find an account with that email. Would you like to sign up instead?");
                 }
             }
         }, 1000);
@@ -209,6 +250,7 @@ const Auth = () => {
 
         const name = signupName.trim() || (role === 'seeker' ? 'New Seeker' : 'New Employer');
         const email = signupEmail.trim();
+        const password = signupPassword;
 
         setTimeout(() => {
             setIsLoading(false);
@@ -216,7 +258,12 @@ const Auth = () => {
                 toast({ title: "Email required", variant: "destructive" });
                 return;
             }
-            signup({ name, email, role, disability });
+            if (!password) {
+                toast({ title: "Password required", description: "Please enter a password to create your account.", variant: "destructive" });
+                if (isVoiceMode) speak("Please enter a password to create your account.");
+                return;
+            }
+            signup({ name, email, role, disability }, password);
             toast({
                 title: "Account created!",
                 description: `Welcome to AbilityJobs, ${name}!`,
@@ -279,7 +326,8 @@ const Auth = () => {
                                             onChange={(e) => setLoginEmail(e.target.value)}
                                             className="bg-background/50 h-11"
                                             ref={loginEmailRef}
-                                            onKeyDown={handleLoginEmailEnter}
+                                            onKeyDown={(e) => { speakCharacter(e); handleLoginEmailEnter(e); }}
+                                            onFocus={() => isVoiceMode && speak('Email field. Type your email address. Each character will be read aloud.')}
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -295,7 +343,8 @@ const Auth = () => {
                                             onChange={(e) => setLoginPassword(e.target.value)}
                                             className="bg-background/50 h-11"
                                             ref={loginPasswordRef}
-                                            onKeyDown={handleLoginPasswordEnter}
+                                            onKeyDown={(e) => { speakCharacter(e); handleLoginPasswordEnter(e); }}
+                                            onFocus={() => isVoiceMode && speak('Password field. Each character you type will be read aloud.')}
                                         />
                                     </div>
                                 </CardContent>
@@ -390,11 +439,11 @@ const Auth = () => {
                                                 placeholder={role === "seeker" ? "John Doe" : "Acme Corp"}
                                                 required
                                                 value={signupName}
-                                                onFocus={() => isVoiceMode && speak(`Enter your ${role === "seeker" ? "full name" : "company name"}. You can say type followed by your name to fill this filed.`)}
+                                                onFocus={() => isVoiceMode && speak(`${role === "seeker" ? "Full name" : "Company name"} field. Each character you type will be read aloud.`)}
                                                 onChange={(e) => setSignupName(e.target.value)}
                                                 className="bg-background/50 h-11"
                                                 ref={nameRef}
-                                                onKeyDown={handleSignupNameEnter}
+                                                onKeyDown={(e) => { speakCharacter(e); handleSignupNameEnter(e); }}
                                             />
                                         </div>
                                         <div className="space-y-2">
@@ -405,11 +454,11 @@ const Auth = () => {
                                                 placeholder="m@example.com"
                                                 required
                                                 value={signupEmail}
-                                                onFocus={() => isVoiceMode && speak("Enter your email address. This will be used for your account login.")}
+                                                onFocus={() => isVoiceMode && speak('Email field. Each character you type will be read aloud.')}
                                                 onChange={(e) => setSignupEmail(e.target.value)}
                                                 className="bg-background/50 h-11"
                                                 ref={signupEmailRef}
-                                                onKeyDown={handleSignupEmailEnter}
+                                                onKeyDown={(e) => { speakCharacter(e); handleSignupEmailEnter(e); }}
                                             />
                                         </div>
                                         <div className="space-y-2">
@@ -419,11 +468,11 @@ const Auth = () => {
                                                 type="password"
                                                 required
                                                 value={signupPassword}
-                                                onFocus={() => isVoiceMode && speak("Create a secure password. For security, I will not read back what you type here.")}
+                                                onFocus={() => isVoiceMode && speak('Password field. Each character you type will be read aloud.')}
                                                 onChange={(e) => setSignupPassword(e.target.value)}
                                                 className="bg-background/50 h-11"
                                                 ref={signupPasswordRef}
-                                                onKeyDown={handleSignupPasswordEnter}
+                                                onKeyDown={(e) => { speakCharacter(e); handleSignupPasswordEnter(e); }}
                                             />
                                         </div>
                                     </div>
