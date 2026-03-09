@@ -43,6 +43,13 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const speakingRef = useRef(false);
   const speakCounterRef = useRef(0);
   const isFirstVoiceActivationRef = useRef(false); // tracks first Enter-press activation
+  const isVoiceModeRef = useRef(isVoiceMode);
+  const manualRecognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    isVoiceModeRef.current = isVoiceMode;
+  }, [isVoiceMode]);
+
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -94,7 +101,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!('speechSynthesis' in window)) { resolve(); return; }
 
       const annyangLib = annyang as any;
-      if (annyangLib && isVoiceMode) {
+      if (annyangLib && isVoiceModeRef.current) {
         annyangLib.abort(); // Hard stop listening when we start speaking
       }
 
@@ -122,7 +129,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setIsSpeaking(false);
           speakingRef.current = false;
           // Only restart annyang if we are still in voice mode
-          if (annyangLib && isVoiceMode) {
+          if (annyangLib && isVoiceModeRef.current) {
             annyangLib.start({ autoRestart: true, continuous: false });
           }
           resolve();
@@ -134,7 +141,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       window.speechSynthesis.speak(utterance);
     });
-  }, [isVoiceMode]);
+  }, []);
 
   const resetAwakeTimer = useCallback(() => {
     if (awakeTimerRef.current) clearTimeout(awakeTimerRef.current);
@@ -155,7 +162,13 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return new Promise((resolve, reject) => {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SpeechRecognition) { reject('Speech recognition not supported'); return; }
+
+      if (manualRecognitionRef.current) {
+        manualRecognitionRef.current.abort();
+      }
+
       const recognition = new SpeechRecognition();
+      manualRecognitionRef.current = recognition;
       recognition.lang = 'en-US';
       recognition.interimResults = false;
       recognition.maxAlternatives = 1;
@@ -229,6 +242,10 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else if (annyangLib) {
       console.log('Stopping annyang');
       annyangLib.abort();
+      if (manualRecognitionRef.current) {
+        manualRecognitionRef.current.abort();
+        manualRecognitionRef.current = null;
+      }
       setIsListening(false);
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
