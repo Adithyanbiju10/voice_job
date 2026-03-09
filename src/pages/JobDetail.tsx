@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ const JobDetail = () => {
   const [applyOpen, setApplyOpen] = useState(false);
   const [alreadyApplied, setAlreadyApplied] = useState(false);
   const [existingApplication, setExistingApplication] = useState<any>(null);
+  const hasReadDetailsRef = useRef(false);
   const { isVoiceMode, speak, listen, isAwake } = useVoice();
   const { user } = useAuth();
 
@@ -66,19 +67,33 @@ const JobDetail = () => {
 
   useEffect(() => {
     if (isVoiceMode && isAwake && job) {
+      // Dynamically check if already applied to handle state updates from dialog
+      let isAppliedNow = alreadyApplied;
+      let currentApp = existingApplication;
+      if (!isAppliedNow && user?.role === 'seeker') {
+        const apps = JSON.parse(localStorage.getItem('user_applications') || '[]');
+        const existing = apps.find((app: any) => app.jobId === job.id && app.applicantEmail === user.email);
+        if (existing) {
+          isAppliedNow = true;
+          currentApp = existing;
+          setAlreadyApplied(true);
+          setExistingApplication(existing);
+        }
+      }
+
       const handleApply = () => {
         if (!user) {
           speak('You need to sign in to apply. Opening the login prompt.');
           setApplyOpen(true);
         } else if (user.role === 'seeker') {
-          if (alreadyApplied && existingApplication) {
-            const appliedDate = new Date(existingApplication.appliedAt).toLocaleDateString('en-US', {
+          if (isAppliedNow && currentApp) {
+            const appliedDate = new Date(currentApp.appliedAt).toLocaleDateString('en-US', {
               weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
             });
             const statusMsg =
-              existingApplication.status === 'Accepted'
+              currentApp.status === 'Accepted'
                 ? 'Congratulations! It has been accepted.'
-                : existingApplication.status === 'Rejected'
+                : currentApp.status === 'Rejected'
                   ? 'Unfortunately, it was rejected.'
                   : 'It is currently pending review.';
             speak(`You have already applied for ${job.title} on ${appliedDate}. ${statusMsg} You cannot apply again.`);
@@ -100,6 +115,16 @@ const JobDetail = () => {
       window.addEventListener('voice-command', handleCommand);
 
       const readJobDetails = async () => {
+        if (hasReadDetailsRef.current) {
+          if (isAppliedNow) {
+            await speak(`You have already applied for this role. What can I do for you? Do you want to browse more jobs or go to home?`);
+          } else {
+            await speak(`You are viewing ${job.title}. What can I do for you? Say 'apply' to submit your application, or say 'go back' to browse more jobs.`);
+          }
+          return;
+        }
+
+        hasReadDetailsRef.current = true;
         await speak(`Job selected: ${job.title} at ${job.company}. Located in ${job.location}.`);
 
         let accessibilityInfo = "";
@@ -107,19 +132,19 @@ const JobDetail = () => {
           accessibilityInfo = `This workplace includes accessibility features such as: ${job.accessibility_features.join(', ')}. `;
         }
 
-        if (alreadyApplied && existingApplication) {
-          const appliedDate = new Date(existingApplication.appliedAt).toLocaleDateString('en-US', {
+        if (isAppliedNow && currentApp) {
+          const appliedDate = new Date(currentApp.appliedAt).toLocaleDateString('en-US', {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
           });
           const statusMsg =
-            existingApplication.status === 'Accepted'
+            currentApp.status === 'Accepted'
               ? 'Congratulations! Your application has been accepted.'
-              : existingApplication.status === 'Rejected'
+              : currentApp.status === 'Rejected'
                 ? 'Unfortunately, your application was rejected.'
                 : 'Your application is currently pending review.';
           await speak(
             `Description: ${job.description}. ${accessibilityInfo}` +
-            `Note: You have already applied for this job on ${appliedDate}. ${statusMsg}`
+            `Note: You have already applied for this job on ${appliedDate}. ${statusMsg} What can I do for you? Do you want to browse more jobs or go to home?`
           );
         } else {
           await speak(`Description: ${job.description}. ${accessibilityInfo} Say 'apply' at any time to start your application.`);
@@ -183,8 +208,8 @@ const JobDetail = () => {
               Already Applied
             </div>
             <span className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider ${existingApplication.status === 'Accepted' ? 'bg-success/20 text-success' :
-                existingApplication.status === 'Rejected' ? 'bg-destructive/20 text-destructive' :
-                  'bg-primary/10 text-primary'
+              existingApplication.status === 'Rejected' ? 'bg-destructive/20 text-destructive' :
+                'bg-primary/10 text-primary'
               }`}>
               Status: {existingApplication.status}
             </span>

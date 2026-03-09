@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useVoice } from '@/contexts/VoiceContext';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Shield, CheckCircle, XCircle, Building2, Users, AlertTriangle, LogOut } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,8 +11,10 @@ import { toast } from 'sonner';
 const Admin = () => {
     const { user, logout, getAllEmployers, verifyEmployer, unverifyEmployer } = useAuth();
     const navigate = useNavigate();
+    const { isVoiceMode, speak } = useVoice();
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        if (isVoiceMode) await speak("Successfully logged out.");
         logout();
         navigate('/');
     };

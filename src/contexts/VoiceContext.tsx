@@ -41,6 +41,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [lastHeard, setLastHeard] = useState("");
   const awakeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const speakingRef = useRef(false);
+  const speakCounterRef = useRef(0);
   const isFirstVoiceActivationRef = useRef(false); // tracks first Enter-press activation
   const location = useLocation();
   const navigate = useNavigate();
@@ -102,20 +103,30 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       utterance.rate = 0.95; // Slightly faster but clearer
       utterance.pitch = 1;
 
+      // Anti-garbage collection hack for Chrome
+      (window as any)._currentVoiceUtterance = utterance;
+
       setIsSpeaking(true);
       speakingRef.current = true;
+      speakCounterRef.current += 1;
+      const currentId = speakCounterRef.current;
 
       const finishSpeaking = () => {
-        // Redced delay to 200ms to make it more responsive
+        // 800ms silence buffer so the mic doesn't pick up TTS tail audio
         setTimeout(() => {
+          // If another utterance has superseded this one, let that one handle it.
+          if (speakCounterRef.current !== currentId) {
+            return resolve();
+          }
+
           setIsSpeaking(false);
           speakingRef.current = false;
+          // Only restart annyang if we are still in voice mode
           if (annyangLib && isVoiceMode) {
             annyangLib.start({ autoRestart: true, continuous: false });
           }
           resolve();
-        }, 200);
-
+        }, 800);
       };
 
       utterance.onend = finishSpeaking;
@@ -361,7 +372,6 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // B. PROFILE PAGE LOGIC
     if (path === '/profile') {
       if (matches(['sign out', 'logout', 'log out', 'goodbye'])) {
-        speak('Signing you out now. Have a great day!');
         window.dispatchEvent(new CustomEvent('voice-command', { detail: 'logout' }));
         return true;
       }
@@ -439,9 +449,15 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Ref to hold the latest processing logic without triggering useEffect re-runs
   const processRef = useRef(processUniversalCommand);
+  const isAwakeRef = useRef(isAwake);
+
   useEffect(() => {
     processRef.current = processUniversalCommand;
   }, [processUniversalCommand]);
+
+  useEffect(() => {
+    isAwakeRef.current = isAwake;
+  }, [isAwake]);
 
   // Unified Annyang Lifecycle
   useEffect(() => {
@@ -466,7 +482,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (speakingRef.current) return;
           window.dispatchEvent(new CustomEvent('voice-input', { detail: text.toLowerCase().trim() }));
 
-          if (isAwake) {
+          if (isAwakeRef.current) {
             const handled = processRef.current(text);
             if (handled) resetAwakeTimer();
           } else {
@@ -491,7 +507,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       annyangLib.abort();
     }
-  }, [isVoiceMode, isAwake, speak]); // Only re-run when mode or awake state flips
+  }, [isVoiceMode, speak]); // Only re-run when mode flips
 
   // Manual Wake Listeners & Shortcuts
   useEffect(() => {
@@ -588,9 +604,20 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Show the overlay immediately
     setIsPrompting(true);
 
+    // Ensure annyang is NOT running while the initial prompt plays
+    const annyangLib = annyang as any;
+    if (annyangLib) {
+      annyangLib.abort();
+    }
+
     const playPrompt = () => {
       if (hasPromptedRef.current || isVoiceMode) return;
       if (window.speechSynthesis.speaking) return;
+
+      // Stop annyang again right before speaking, in case something restarted it
+      if (annyangLib) {
+        annyangLib.abort();
+      }
 
       const utterance = new SpeechSynthesisUtterance(
         'Welcome to Ability jobs. Voice assistance is available for visually impaired users. If you want to enable voice assistance, please press the Enter key now. To continue without voice assistance, click anywhere.'
@@ -602,6 +629,10 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (promptIntervalRef.current) {
           clearInterval(promptIntervalRef.current);
           promptIntervalRef.current = null;
+        }
+        // Make absolutely sure annyang stays off while prompt is playing
+        if (annyangLib) {
+          annyangLib.abort();
         }
       };
 

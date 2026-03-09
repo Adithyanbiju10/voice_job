@@ -54,7 +54,7 @@ const Profile = () => {
             const handleCommand = async (e: any) => {
                 const cmd = e.detail;
                 if (cmd === 'logout') {
-                    handleLogout();
+                    await handleLogout();
                 } else if (cmd === 'applications') {
                     if (user.role === 'seeker') {
                         setActiveTab("applications");
@@ -124,7 +124,10 @@ const Profile = () => {
         return <Navigate to="/auth" replace />;
     }
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        if (isVoiceMode) {
+            await speak("Successfully logged out.");
+        }
         logout();
         navigate('/');
     };

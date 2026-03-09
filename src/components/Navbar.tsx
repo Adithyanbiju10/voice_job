@@ -145,7 +145,13 @@ const Navbar = () => {
                     </Link>
                   </Button>
                 )}
-                <Button variant="ghost" className="w-full rounded-lg justify-start text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { logout(); setMobileOpen(false); }}>
+                <Button variant="ghost" className="w-full rounded-lg justify-start text-destructive hover:text-destructive hover:bg-destructive/10" onClick={async () => {
+                  if (isVoiceMode) {
+                    await speak("Successfully logged out.");
+                  }
+                  logout();
+                  setMobileOpen(false);
+                }}>
                   Sign Out
                 </Button>
               </div>
