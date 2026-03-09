@@ -55,7 +55,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!registeredUsers) {
             const demoUsers = [
                 { id: '1', name: 'Job Seeker', email: 'user@example.com', role: 'seeker' as Role, disability: 'none', isVerified: false, password: hashPassword('password123') },
-                { id: '2', name: 'TechCorp', email: 'employer@example.com', role: 'employer' as Role, disability: 'none', isVerified: false, password: hashPassword('password123') },
                 { id: 'admin-001', name: 'Platform Admin', email: 'admin@abilityjobs.com', role: 'admin' as Role, disability: 'none', isVerified: true, password: hashPassword('admin123') }
             ];
             localStorage.setItem('ability_jobs_registered_users', JSON.stringify(demoUsers));
@@ -67,6 +66,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Ensure admin exists
             if (!parsed.find(u => u.role === 'admin')) {
                 parsed.push({ id: 'admin-001', name: 'Platform Admin', email: 'admin@abilityjobs.com', role: 'admin' as Role, disability: 'none', isVerified: true, password: hashPassword('admin123') });
+                changed = true;
+            }
+
+            // Remove the hardcoded dummy TechCorp employer if present
+            const techCorpIndex = parsed.findIndex(u => u.id === '2' && u.email === 'employer@example.com');
+            if (techCorpIndex !== -1) {
+                parsed.splice(techCorpIndex, 1);
                 changed = true;
             }
 

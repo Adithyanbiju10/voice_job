@@ -46,11 +46,12 @@ const LoginNotifier = () => {
         visits[user.email] = new Date().toISOString();
         localStorage.setItem(LAST_VISIT_KEY, JSON.stringify(visits));
 
-        const timer = setTimeout(() => {
-            // Run both checks in parallel
-            checkApplicationUpdates({ userName: user.name, userEmail: user.email, shouldSpeak, isBlind, speak });
-            checkNewJobs({ userName: user.name, userEmail: user.email, lastVisitISO, shouldSpeak, isBlind, speak });
-        }, 1400);
+        // Give the "Navigated to Home page" announcement time to finish (approx 3.5s)
+        const timer = setTimeout(async () => {
+            // Run checks sequentially to prevent voice overlap
+            await checkApplicationUpdates({ userName: user.name, userEmail: user.email, shouldSpeak, isBlind, speak });
+            await checkNewJobs({ userName: user.name, userEmail: user.email, lastVisitISO, shouldSpeak, isBlind, speak });
+        }, 4000);
 
         return () => clearTimeout(timer);
     }, [user, isVoiceMode, speak]);
@@ -112,40 +113,38 @@ async function checkApplicationUpdates({ userName, userEmail, shouldSpeak, isBli
     if (!shouldSpeak) return;
 
     const toastDelay = notifications.length * 700 + 800;
-    setTimeout(async () => {
-        const firstName = userName.split(' ')[0];
-        await speakLine(speak, `Welcome back, ${firstName}.`);
-        await pause(600);
+    await pause(toastDelay);
 
-        if (notifications.length === 0) {
-            if (isBlind) {
-                if (myApps.length === 0) {
-                    await speakLine(speak, `You have no applications yet. Browse jobs and apply to get started.`);
-                } else if (pendingCount > 0) {
-                    await speakLine(speak, `You have ${pendingCount} application${pendingCount > 1 ? 's' : ''} pending review. No new updates since your last visit.`);
-                } else {
-                    await speakLine(speak, `All your applications have been reviewed. No new updates.`);
-                }
+    const firstName = userName.split(' ')[0];
+
+    if (notifications.length === 0) {
+        if (isBlind) {
+            if (myApps.length === 0) {
+                await speakLine(speak, `You have no applications yet. Browse jobs and apply to get started.`);
+            } else if (pendingCount > 0) {
+                await speakLine(speak, `You have ${pendingCount} application${pendingCount > 1 ? 's' : ''} pending review. No new updates since your last visit.`);
+            } else {
+                await speakLine(speak, `All your applications have been reviewed. No new updates.`);
             }
-            return;
         }
+        return;
+    }
 
-        await speakLine(speak, `You have ${notifications.length} new application update${notifications.length > 1 ? 's' : ''}.`);
-        await pause(500);
+    await speakLine(speak, `Here are your updates, ${firstName}. You have ${notifications.length} new application update${notifications.length > 1 ? 's' : ''}.`);
+    await pause(500);
 
-        for (let i = 0; i < notifications.length; i++) {
-            const { app, isAccepted } = notifications[i];
-            await pause(400);
-            isAccepted
-                ? await speakLine(speak, `Update ${i + 1}: Congratulations! Your application for ${app.jobTitle} at ${app.employerName} has been accepted. You can view the details in your profile under the Applications tab.`)
-                : await speakLine(speak, `Update ${i + 1}: Your application for ${app.jobTitle} at ${app.employerName} was not selected this time. Don't be discouraged — keep exploring other opportunities.`);
-            await pause(700);
-        }
+    for (let i = 0; i < notifications.length; i++) {
+        const { app, isAccepted } = notifications[i];
+        await pause(400);
+        isAccepted
+            ? await speakLine(speak, `Update ${i + 1}: Congratulations! Your application for ${app.jobTitle} at ${app.employerName} has been accepted. You can view the details in your profile under the Applications tab.`)
+            : await speakLine(speak, `Update ${i + 1}: Your application for ${app.jobTitle} at ${app.employerName} was not selected this time. Don't be discouraged — keep exploring other opportunities.`);
+        await pause(700);
+    }
 
-        if (pendingCount > 0) {
-            await speakLine(speak, `You still have ${pendingCount} application${pendingCount > 1 ? 's' : ''} pending. Say "applications" on your profile page to hear their full details.`);
-        }
-    }, toastDelay);
+    if (pendingCount > 0) {
+        await speakLine(speak, `You still have ${pendingCount} application${pendingCount > 1 ? 's' : ''} pending. Say "applications" on your profile page to hear their full details.`);
+    }
 }
 
 // ─── New job notifications ────────────────────────────────────────────────────
@@ -203,48 +202,41 @@ async function checkNewJobs({ userName, userEmail, lastVisitISO, shouldSpeak, is
 
     if (!shouldSpeak) return;
 
-    // ── Voice announcements — same sequential style as application updates ─────
-    const voiceDelay = baseDelay + toShow.length * 700 + 800;
+    // ── Voice announcements — sequential ─────
+    await pause(1000); // small buffer before starting job announcements
 
-    setTimeout(async () => {
-        const count = newJobs.length;
+    const count = newJobs.length;
 
-        if (count === 0) {
-            // Always confirm to blind users that the check ran (no new jobs)
-            if (isBlind) {
-                await speakLine(speak, `No new jobs since your last visit. Check the Jobs page anytime to browse all available listings.`);
-            }
-            return;
+    if (count === 0) {
+        // Always confirm to blind users that the check ran (no new jobs)
+        if (isBlind) {
+            await speakLine(speak, `No new jobs since your last visit. Check the Jobs page anytime to browse all available listings.`);
         }
+        return;
+    }
 
-        // Announce the count first — same as application updates
-        await speakLine(speak,
-            count === 1
-                ? `There is 1 new job posted since your last visit.`
-                : `There are ${count} new jobs posted since your last visit.`
-        );
-        await pause(500);
+    // Announce the count first
+    await speakLine(speak,
+        count === 1
+            ? `There is 1 new job posted since your last visit.`
+            : `There are ${count} new jobs posted since your last visit.`
+    );
+    await pause(500);
 
-        // Read each job one-by-one with full details — same rhythm as application updates
-        for (let i = 0; i < toShow.length; i++) {
-            const job = toShow[i];
-            await pause(400);
-            await speakLine(speak,
-                `Job ${i + 1}: ${job.title} at ${job.company}. ` +
-                `Location: ${job.location}. ` +
-                `Type: ${job.job_type}.` +
-                (job.salary_range ? ` Salary range: ${job.salary_range}.` : '')
-            );
-            await pause(700);
-        }
+    // Read each job one-by-one with title and company only
+    for (let i = 0; i < toShow.length; i++) {
+        const job = toShow[i];
+        await pause(400);
+        await speakLine(speak, `Job ${i + 1}: ${job.title} at ${job.company}.`);
+        await pause(700);
+    }
 
-        // Closing guidance — same as application updates closing
-        if (count > 5) {
-            await speakLine(speak, `And ${count - 5} more new listing${count - 5 > 1 ? 's' : ''}. Go to the Jobs page to explore all of them.`);
-        } else {
-            await speakLine(speak, `Say "browse jobs" to visit the Jobs page and apply.`);
-        }
-    }, voiceDelay);
+    // Closing guidance
+    if (count > 5) {
+        await speakLine(speak, `And ${count - 5} more new listing${count - 5 > 1 ? 's' : ''}. Go to the Jobs page to explore all of them.`);
+    } else {
+        await speakLine(speak, `Say "browse jobs" to visit the Jobs page and apply.`);
+    }
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
