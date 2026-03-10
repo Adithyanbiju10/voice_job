@@ -300,6 +300,11 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       navigate('/profile');
       return true;
     }
+    if (matches(['learning', 'resources', 'tutorials', 'training', 'education', 'guides'])) {
+      speak('Opening the learning center. You can find guides on screen readers and career tips here.');
+      navigate('/learning');
+      return true;
+    }
     if (matches(['messages', 'communications', 'inbox']) || (matches(['chat']) && !matches(['voice chat']))) {
       speak('Opening your messages.');
       navigate('/messages');
@@ -429,14 +434,29 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return true;
       }
 
-      if (matches(['yes', 'yeah', 'yup', 'i am', 'correct', 'definitely', 'yes i am', 'sure', 'affirmative'])) {
-        window.dispatchEvent(new CustomEvent('voice-command', { detail: 'select-blind' }));
-        return true;
+      if (matches(['yes', 'yeah', 'yup', 'i am', 'correct', 'definitely', 'yes i am', 'sure', 'affirmative', 'please', 'do it', 'open it'])) {
+        // First check for specific page contexts
+        if (path === '/learning') {
+          window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'yes' }));
+          return true;
+        }
+
+        if (path.startsWith('/auth')) {
+          window.dispatchEvent(new CustomEvent('voice-command', { detail: 'select-blind' }));
+          return true;
+        }
       }
 
-      if (matches(['no', 'nah', 'not really', 'i am not', 'negative', 'nope', 'never'])) {
-        speak('Understood. Are you a job seeker or an employer?');
-        return true;
+      if (matches(['no', 'nah', 'not really', 'i am not', 'negative', 'nope', 'never', 'don\'t', 'stop it'])) {
+        if (path === '/learning') {
+          window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'no' }));
+          return true;
+        }
+
+        if (path.startsWith('/auth')) {
+          speak('Understood. Are you a job seeker or an employer?');
+          return true;
+        }
       }
 
     }
@@ -451,7 +471,26 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    // E. MESSAGES PAGE LOGIC
+    // E. LEARNING PAGE LOGIC
+    if (path === '/learning') {
+      if (matches(['open', 'watch', 'view', 'read about', 'start'])) {
+        const query = input
+          .replace('open', '')
+          .replace('watch', '')
+          .replace('view', '')
+          .replace('read about', '')
+          .replace('start', '')
+          .trim();
+
+        if (query) {
+          // Dispatch a custom event that Learning.tsx will listen for
+          window.dispatchEvent(new CustomEvent('voice-open-resource', { detail: query }));
+          return true;
+        }
+      }
+    }
+
+    // F. MESSAGES PAGE LOGIC
     if (path === '/messages') {
       if (input.startsWith('select ')) {
         const name = input.substring(7).trim();
@@ -481,14 +520,21 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     // 5. Fallback Logic (Helpful Nudges)
-    if (input.length > 2) {
-      const handled = true; // Mark as handled by fallback
+    if (input.length > 1) {
       resetAwakeTimer();
 
-      const path = location.pathname;
-      if (path === '/') {
+      // SPECIFIC FIX: If we are on learning page and user says isolated "yes" or "select"
+      if (path === '/learning') {
+        if (matches(['yes', 'select', 'open', 'yeah', 'please'])) {
+          window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'yes' }));
+          return true;
+        }
+      }
+
+      const pathName = location.pathname;
+      if (pathName === '/') {
         speak(`I didn't quite get that. You can say "search for jobs" or "about" to learn more.`);
-      } else if (path === '/jobs') {
+      } else if (pathName === '/jobs') {
         speak(`I'm not sure. You can say "read first job" or "find tech jobs".`);
       } else {
         speak(`I'm still learning! You can say "go home" or "help".`);
@@ -528,9 +574,55 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         'ability': wakeUp
       };
 
+      const confirmationCommands = {
+        'yes': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'yes' }));
+          resetAwakeTimer();
+        },
+        'yeah': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'yes' }));
+          resetAwakeTimer();
+        },
+        'no': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'no' }));
+          resetAwakeTimer();
+        },
+        'next': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'next' }));
+          resetAwakeTimer();
+        },
+        'back': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'back' }));
+          resetAwakeTimer();
+        },
+        'previous': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'back' }));
+          resetAwakeTimer();
+        },
+        'stop': () => {
+          window.speechSynthesis.cancel();
+          speak("Stopping.");
+        }
+      };
+
       const universalCommand = {
         '*text': (text: string) => {
           if (speakingRef.current) return;
+
+          // Phonetic fallback for "yes" if the exact command didn't match
+          const lowText = text.toLowerCase().trim();
+          if (location.pathname === '/learning' && (lowText === 'yes' || lowText === 'yeah' || lowText === 'open it')) {
+            window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'yes' }));
+            resetAwakeTimer();
+            return;
+          }
+
           window.dispatchEvent(new CustomEvent('voice-input', { detail: text.toLowerCase().trim() }));
 
           if (isAwakeRef.current) {
@@ -547,6 +639,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       annyangLib.removeCommands();
       annyangLib.addCommands(wakeCommands);
+      annyangLib.addCommands(confirmationCommands);
       annyangLib.addCommands(universalCommand);
 
       annyangLib.start({ autoRestart: true, continuous: false });
@@ -614,6 +707,11 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     const pageName = location.pathname === '/' ? 'Home' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2);
+
+    // Skip generic announcement for Learning page as it has its own intro
+    if (location.pathname === '/learning') {
+      return;
+    }
 
     // Brief delay to allow page render
     setTimeout(() => {
