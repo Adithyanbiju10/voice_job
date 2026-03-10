@@ -300,6 +300,11 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       navigate('/profile');
       return true;
     }
+    if (matches(['messages', 'communications', 'inbox']) || (matches(['chat']) && !matches(['voice chat']))) {
+      speak('Opening your messages.');
+      navigate('/messages');
+      return true;
+    }
     if (matches(['sign in', 'login', 'log in', 'access my account'])) {
       navigate('/auth?mode=login');
       return true;
@@ -442,6 +447,35 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (matches(['apply', 'this job', 'send application', 'interest', 'get this'])) {
         speak('Opening the application process for this position.');
         window.dispatchEvent(new CustomEvent('voice-command', { detail: 'apply' }));
+        return true;
+      }
+    }
+
+    // E. MESSAGES PAGE LOGIC
+    if (path === '/messages') {
+      if (input.startsWith('select ')) {
+        const name = input.substring(7).trim();
+        window.dispatchEvent(new CustomEvent('voice-command', { detail: { action: 'select', name } }));
+        return true;
+      }
+      if (matches(['read my message', 'what did i type', 'what is my message', 'read what i wrote'])) {
+        window.dispatchEvent(new CustomEvent('voice-command', { detail: { action: 'read-my-message' } }));
+        return true;
+      }
+      if (matches(['clear message', 'delete message', 'start over', 'erase message'])) {
+        window.dispatchEvent(new CustomEvent('voice-command', { detail: { action: 'clear-message' } }));
+        return true;
+      }
+      if (matches(['send message', 'send'])) {
+        window.dispatchEvent(new CustomEvent('voice-command', { detail: { action: 'send' } }));
+        return true;
+      }
+      if (matches(['read messages', 'read', 'read history'])) {
+        window.dispatchEvent(new CustomEvent('voice-command', { detail: { action: 'read' } }));
+        return true;
+      }
+      if (input.length > 2) {
+        window.dispatchEvent(new CustomEvent('voice-command', { detail: { action: 'try-select', name: input } }));
         return true;
       }
     }
@@ -702,15 +736,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         } else if (e.key !== 'Tab') {
           dismissPrompt();
         }
-      } else if (e instanceof MouseEvent) {
-        // If clicking during the prompt, it serves as the "User Gesture" needed by browsers
-        // The NEXT interval tick will now succeed if it was blocked before.
-        // If they click outside the card or just generally, we might want to dismiss 
-        // BUT if they click the overlay to unblock, we shouldn't dismiss immediately.
-        // For now, let's keep it simple: any click dismisses UNLESS we are still waiting for audio.
-        if (window.speechSynthesis.speaking) {
-          dismissPrompt();
-        }
+      } else if (e.type === 'mousedown' || e instanceof MouseEvent || e instanceof PointerEvent) {
+        dismissPrompt();
       }
     };
 

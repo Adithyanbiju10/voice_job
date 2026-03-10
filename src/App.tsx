@@ -18,6 +18,8 @@ import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import Learning from "./pages/Learning";
+import Messages from "./pages/Messages";
 import LoginNotifier from "@/components/LoginNotifier";
 
 const GlobalVoiceController = () => {
@@ -35,6 +37,8 @@ const GlobalVoiceController = () => {
         <Route path="/auth" element={<Auth />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/learning" element={<Learning />} />
+        <Route path="/messages" element={<Messages />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </>

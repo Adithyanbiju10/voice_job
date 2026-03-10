@@ -212,14 +212,21 @@ const Auth = () => {
                 const stored = localStorage.getItem('ability_jobs_user');
                 const loggedInUser = stored ? JSON.parse(stored) : null;
                 const isAdmin = loggedInUser?.role === 'admin';
+                const isBlind = loggedInUser?.disability === 'blind';
                 toast({
                     title: isAdmin ? "Welcome, Admin!" : "Welcome back!",
                     description: isAdmin ? "Redirecting to admin dashboard." : "You have successfully signed in.",
                 });
+                const redirectPath = isAdmin ? "/admin" : "/";
                 if (isVoiceMode) {
-                    speak(isAdmin ? `Welcome Admin. Redirecting to admin dashboard.` : `Welcome back! Redirecting to home page.`);
+                    if (isBlind) {
+                        speak("You are successfully logged in.").then(() => navigate(redirectPath));
+                    } else {
+                        speak(isAdmin ? `Welcome Admin. Redirecting to admin dashboard.` : `Welcome back! Redirecting to home page.`).then(() => navigate(redirectPath));
+                    }
+                } else {
+                    navigate(redirectPath);
                 }
-                navigate(isAdmin ? "/admin" : "/");
             } else {
                 setIsLoading(false);
                 // Distinguish between unknown email and wrong password

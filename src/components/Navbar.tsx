@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Briefcase, Home, Info, Mic, MicOff, Moon, Sun, Menu, X, Shield } from 'lucide-react';
+import { Briefcase, Home, Info, Mic, MicOff, Moon, Sun, Menu, X, Shield, GraduationCap, MessageSquare } from 'lucide-react';
 import { useVoice } from '@/contexts/VoiceContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,6 +11,8 @@ import annyang from 'annyang';
 const navLinks = [
   { to: '/', label: 'Home', icon: Home },
   { to: '/jobs', label: 'Jobs', icon: Briefcase },
+  { to: '/learning', label: 'Learning', icon: GraduationCap },
+  { to: '/messages', label: 'Messages', icon: MessageSquare },
   { to: '/about', label: 'About', icon: Info },
 ];
 

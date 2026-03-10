@@ -36,7 +36,7 @@ const LoginNotifier = () => {
         if (!isJustLoggedIn) return;
 
         const isBlind = user.disability === 'blind';
-        const shouldSpeak = isVoiceMode || isBlind;
+        const shouldSpeak = isVoiceMode;
 
         // Capture last visit time BEFORE updating it
         const visits: Record<string, string> = JSON.parse(localStorage.getItem(LAST_VISIT_KEY) || '{}');

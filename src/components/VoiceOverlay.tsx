@@ -2,9 +2,10 @@ import { useVoice } from '@/contexts/VoiceContext';
 import { Mic } from 'lucide-react';
 
 const VoiceOverlay = () => {
-  const { isListening, isSpeaking, isPrompting, isAwake, lastHeard } = useVoice();
+  const { isVoiceMode, isListening, isSpeaking, isPrompting, isAwake, lastHeard } = useVoice();
 
-  if (!isListening && !isSpeaking && !isPrompting) return null;
+  if (!isVoiceMode && !isPrompting) return null;
+  if (!isListening && !isSpeaking && !isPrompting && !isAwake) return null;
 
   // Initial Accessibility Prompt
   if (isPrompting) {
