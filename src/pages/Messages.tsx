@@ -89,6 +89,21 @@ const Messages = () => {
                     });
                 }
             });
+        } else if (user.role === 'admin') {
+            // Admin sees all unique conversations on the platform
+            allApps.forEach((app: any) => {
+                const conversationId = `${app.employerName}_${app.applicantEmail}`;
+                if (!contactMap.has(conversationId)) {
+                    contactMap.set(conversationId, {
+                        id: conversationId,
+                        name: `${app.applicantName} ↔ ${app.employerName}`,
+                        role: 'seeker', // Meta-role
+                        unread: 0,
+                        jobTitle: app.jobTitle,
+                        otherUserName: app.applicantName,
+                    });
+                }
+            });
         }
 
         const loadedContacts = Array.from(contactMap.values());
@@ -375,7 +390,9 @@ const Messages = () => {
                     Communications
                 </h1>
                 <p className="text-muted-foreground text-lg">
-                    Real-time chat with {user?.role === 'employer' ? 'applicants' : 'employers'}, schedule interviews, and discuss roles.
+                    {user?.role === 'admin'
+                        ? 'Monitoring all platform communication for quality and safety.'
+                        : `Real-time chat with ${user?.role === 'employer' ? 'applicants' : 'employers'}, schedule interviews, and discuss roles.`}
                 </p>
             </div>
 
@@ -480,34 +497,36 @@ const Messages = () => {
                                 </div>
                             </ScrollArea>
 
-                            <div className="p-4 border-t bg-card z-10">
-                                <form
-                                    onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-                                    className="flex items-center gap-2"
-                                >
-                                    <Button
-                                        id="mic-button"
-                                        type="button"
-                                        size="icon"
-                                        variant="outline"
-                                        className={`rounded-full shadow-sm transition-colors ${isListening ? 'bg-destructive/10 border-destructive text-destructive' : ''}`}
-                                        onClick={toggleDictation}
-                                        title="Dictate message"
+                            {user?.role !== 'admin' && (
+                                <div className="p-4 border-t bg-card z-10">
+                                    <form
+                                        onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+                                        className="flex items-center gap-2"
                                     >
-                                        <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
-                                    </Button>
-                                    <Input
-                                        value={inputText}
-                                        onChange={(e) => setInputText(e.target.value)}
-                                        placeholder={isListening ? "Listening..." : "Type your message..."}
-                                        className="flex-1 rounded-full border-primary/20 focus-visible:ring-primary/50"
-                                        onFocus={() => isVoiceMode && speak("Type your message here. Press Enter to send, or use Control and Space to start dictating.")}
-                                    />
-                                    <Button type="submit" size="icon" className="rounded-full shadow-md hover:scale-105 transition-transform" disabled={!inputText.trim()}>
-                                        <Send className="h-4 w-4" />
-                                    </Button>
-                                </form>
-                            </div>
+                                        <Button
+                                            id="mic-button"
+                                            type="button"
+                                            size="icon"
+                                            variant="outline"
+                                            className={`rounded-full shadow-sm transition-colors ${isListening ? 'bg-destructive/10 border-destructive text-destructive' : ''}`}
+                                            onClick={toggleDictation}
+                                            title="Dictate message"
+                                        >
+                                            <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
+                                        </Button>
+                                        <Input
+                                            value={inputText}
+                                            onChange={(e) => setInputText(e.target.value)}
+                                            placeholder={isListening ? "Listening..." : "Type your message..."}
+                                            className="flex-1 rounded-full border-primary/20 focus-visible:ring-primary/50"
+                                            onFocus={() => isVoiceMode && speak("Type your message here. Press Enter to send, or use Control and Space to start dictating.")}
+                                        />
+                                        <Button type="submit" size="icon" className="rounded-full shadow-md hover:scale-105 transition-transform" disabled={!inputText.trim()}>
+                                            <Send className="h-4 w-4" />
+                                        </Button>
+                                    </form>
+                                </div>
+                            )}
                         </>
                     ) : (
                         <div className="flex-1 flex items-center justify-center text-muted-foreground flex-col gap-4">
