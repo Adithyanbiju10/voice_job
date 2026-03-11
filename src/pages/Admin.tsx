@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 const Admin = () => {
-    const { user, logout, getAllEmployers, verifyEmployer, unverifyEmployer } = useAuth();
+    const { user, logout, getAllEmployers, verifyEmployer, unverifyEmployer, registeredUsers } = useAuth();
     const navigate = useNavigate();
     const { isVoiceMode, speak } = useVoice();
 
@@ -18,12 +18,8 @@ const Admin = () => {
         logout();
         navigate('/');
     };
-    const [employers, setEmployers] = useState<any[]>([]);
-    const [refresh, setRefresh] = useState(0);
 
-    useEffect(() => {
-        setEmployers(getAllEmployers());
-    }, [refresh]);
+    const employers = getAllEmployers();
 
     // Guard: only admin can access this page
     if (!user || user.role !== 'admin') {
@@ -33,13 +29,11 @@ const Admin = () => {
     const handleVerify = (employer: any) => {
         verifyEmployer(employer.id);
         toast.success(`${employer.name} has been verified as a trusted employer.`);
-        setRefresh(r => r + 1);
     };
 
     const handleUnverify = (employer: any) => {
         unverifyEmployer(employer.id);
         toast.warning(`${employer.name}'s verification has been revoked.`);
-        setRefresh(r => r + 1);
     };
 
     const verifiedCount = employers.filter(e => e.isVerified).length;

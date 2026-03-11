@@ -605,57 +605,59 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       const confirmationCommands = {
         'yes': () => {
-          if (speakingRef.current) return;
           window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'yes' }));
           resetAwakeTimer();
         },
         'yeah': () => {
-          if (speakingRef.current) return;
           window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'yes' }));
           resetAwakeTimer();
         },
         'no': () => {
-          if (speakingRef.current) return;
           window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'no' }));
           resetAwakeTimer();
         },
         'next': () => {
-          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'next' }));
+          resetAwakeTimer();
+        },
+        'necks': () => {
+          window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'next' }));
+          resetAwakeTimer();
+        },
+        'text': () => {
+          // only if on pages where 'text' isn't explicitly an action
           window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'next' }));
           resetAwakeTimer();
         },
         'back': () => {
-          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'back' }));
+          resetAwakeTimer();
+        },
+        'bag': () => {
           window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'back' }));
           resetAwakeTimer();
         },
         'previous': () => {
-          if (speakingRef.current) return;
           window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'back' }));
           resetAwakeTimer();
         },
         'select': () => {
-          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'select' }));
+          resetAwakeTimer();
+        },
+        'selection': () => {
           window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'select' }));
           resetAwakeTimer();
         },
         'remove': () => {
-          if (speakingRef.current) return;
-          window.dispatchEvent(new CustomEvent('voice-command', { detail: 'remove' }));
-          resetAwakeTimer();
-        },
-        'remove it': () => {
-          if (speakingRef.current) return;
           window.dispatchEvent(new CustomEvent('voice-command', { detail: 'remove' }));
           resetAwakeTimer();
         },
         'clear': () => {
-          if (speakingRef.current) return;
           window.dispatchEvent(new CustomEvent('voice-command', { detail: 'remove' }));
           resetAwakeTimer();
         },
         'delete': () => {
-          if (speakingRef.current) return;
           window.dispatchEvent(new CustomEvent('voice-command', { detail: 'remove' }));
           resetAwakeTimer();
         },
@@ -669,8 +671,32 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         '*text': (text: string) => {
           if (speakingRef.current) return;
 
-          // Phonetic fallback for "yes" if the exact command didn't match
+          window.dispatchEvent(new CustomEvent('voice-input', { detail: text.toLowerCase().trim() }));
+
           const lowText = text.toLowerCase().trim();
+
+          // Improved phonetic matching for core actions in wildcard
+          if (['next', 'necks', 'nest', 'text'].includes(lowText)) {
+            window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'next' }));
+            resetAwakeTimer();
+            return;
+          }
+          if (['back', 'bag', 'pack', 'return'].includes(lowText)) {
+            window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'back' }));
+            resetAwakeTimer();
+            return;
+          }
+          if (['select', 'selection', 'open'].includes(lowText)) {
+            window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'select' }));
+            resetAwakeTimer();
+            return;
+          }
+          if (['remove', 'clear', 'delete'].includes(lowText)) {
+            window.dispatchEvent(new CustomEvent('voice-command', { detail: 'remove' }));
+            resetAwakeTimer();
+            return;
+          }
+
           if (location.pathname === '/learning' && (lowText === 'yes' || lowText === 'yeah' || lowText === 'open it')) {
             window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'yes' }));
             resetAwakeTimer();

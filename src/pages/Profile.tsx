@@ -419,7 +419,14 @@ const Profile = () => {
                                         <p className="text-sm font-medium text-muted-foreground">
                                             {user.role === 'employer' ? 'Company Name' : 'Full Name'}
                                         </p>
-                                        <p className="text-base font-semibold">{user.name}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-base font-semibold">{user.name}</p>
+                                            {user.role === 'employer' && user.isVerified && (
+                                                <Badge className="bg-success/15 text-success border-success/30 border gap-1 text-[10px] px-2 h-5">
+                                                    <CheckCircle className="h-2.5 w-2.5" /> Verified
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/30 border border-border/50">

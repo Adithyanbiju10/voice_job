@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { MapPin, Clock, IndianRupee, Accessibility, ArrowRight, CheckCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Tables } from '@/integrations/supabase/types';
 
 interface JobCardProps {
@@ -11,13 +12,12 @@ interface JobCardProps {
 }
 
 const JobCard = ({ job, index = 0, isActive = false }: JobCardProps) => {
+  const { registeredUsers } = useAuth();
+
   // Check if the employer who posted this job is verified
-  const isVerifiedEmployer = (() => {
-    try {
-      const users = JSON.parse(localStorage.getItem('ability_jobs_registered_users') || '[]');
-      return users.some((u: any) => u.role === 'employer' && u.name === job.company && u.isVerified === true);
-    } catch { return false; }
-  })();
+  const isVerifiedEmployer = registeredUsers.some(
+    (u: any) => u.role === 'employer' && u.name === job.company && u.isVerified === true
+  );
   return (
     <Link to={`/jobs/${job.id}`} aria-label={`View ${job.title} at ${job.company}`}>
       <Card className={`group cursor-pointer relative overflow-hidden transition-all duration-300

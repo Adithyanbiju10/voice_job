@@ -106,6 +106,7 @@ const Learning = () => {
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
     const currentResourceRef = useRef<any>(null);
     const stopReadingRef = useRef(false);
+    const isReturningFromOpenRef = useRef(false);
 
     const getFormatIcon = (format: string) => {
         switch (format) {
@@ -136,7 +137,6 @@ const Learning = () => {
         }
         return () => {
             stopReadingRef.current = true;
-            window.speechSynthesis.cancel();
             if (timerRef.current) clearTimeout(timerRef.current);
         };
     }, [isVoiceMode, setIsAwake, speak]);
@@ -151,6 +151,10 @@ const Learning = () => {
 
                 // Cancel any ongoing speech before starting the new one
                 window.speechSynthesis.cancel();
+
+                // Small delay to ensure synthesis state is cleared
+                await new Promise(r => setTimeout(r, 100));
+
                 await speak(`${resource.title}.`);
                 setIsAwake(true);
 
@@ -158,11 +162,12 @@ const Learning = () => {
                 if (timerRef.current) clearTimeout(timerRef.current);
 
                 // Set timer for auto-advancing to next resource
+                // Increased to 6 seconds to give user more time to react
                 timerRef.current = setTimeout(() => {
                     if (!stopReadingRef.current) {
                         setCurrentIndex(prev => prev + 1);
                     }
-                }, 4000);
+                }, 6000);
             };
 
             readResource();
@@ -193,6 +198,7 @@ const Learning = () => {
             if (type === 'yes') {
                 if (currentResourceRef.current) {
                     stopReadingRef.current = true;
+                    isReturningFromOpenRef.current = true;
                     if (timerRef.current) clearTimeout(timerRef.current);
 
                     const url = currentResourceRef.current.url;
@@ -219,9 +225,25 @@ const Learning = () => {
 
         window.addEventListener('voice-navigation', handleNavigation);
         window.addEventListener('voice-confirmation', handleVoiceConfirmation);
+
+        const handleFocus = () => {
+            if (isVoiceMode && isReturningFromOpenRef.current) {
+                isReturningFromOpenRef.current = false;
+                stopReadingRef.current = false;
+                window.speechSynthesis.cancel();
+                speak("Welcome back. Continuing with the next resource.");
+                // Delay slightly to allow the greeting to finish
+                setTimeout(() => {
+                    setCurrentIndex(prev => prev + 1);
+                }, 2000);
+            }
+        };
+        window.addEventListener('focus', handleFocus);
+
         return () => {
             window.removeEventListener('voice-navigation', handleNavigation);
             window.removeEventListener('voice-confirmation', handleVoiceConfirmation);
+            window.removeEventListener('focus', handleFocus);
         };
     }, [isVoiceMode, speak]);
 
@@ -236,6 +258,14 @@ const Learning = () => {
 
             if (resource) {
                 stopReadingRef.current = true;
+                isReturningFromOpenRef.current = true;
+
+                // Update currentIndex to the index of the resource found (if in filtered list)
+                const resIdx = filteredResources.findIndex(r => r.id === resource.id);
+                if (resIdx !== -1) {
+                    setCurrentIndex(resIdx);
+                }
+
                 const url = resource.url;
 
                 // Priority 1: Open immediately

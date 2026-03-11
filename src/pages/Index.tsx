@@ -19,7 +19,7 @@ const Index = () => {
 
   useEffect(() => {
     if (isVoiceMode && isAwake && !user) {
-      speak("Welcome to Ability Jobs. You are currently not signed in. You can say 'go to login' to sign in or create an account.");
+      speak("Welcome to Ability Jobs. You are currently not signed in. Please say sign in to log in and sign up to create an account.");
     }
   }, [isVoiceMode, isAwake, user]);
 

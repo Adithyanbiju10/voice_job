@@ -44,6 +44,7 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
     const companyRef = useRef<HTMLInputElement>(null);
     const locationRef = useRef<HTMLInputElement>(null);
     const salaryRef = useRef<HTMLInputElement>(null);
+    const requirementsRef = useRef<HTMLTextAreaElement>(null);
     const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
     const [formData, setFormData] = useState({
@@ -53,6 +54,7 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
         category: "Technology",
         job_type: "Full-time",
         salary_range: "",
+        requirements: "",
         description: "",
         accessibility_features: [] as string[],
     });
@@ -102,7 +104,7 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
                 salary_range: formData.salary_range,
                 description: formData.description,
                 accessibility_features: formData.accessibility_features,
-                requirements: []
+                requirements: formData.requirements.split(',').map(r => r.trim()).filter(r => r !== "")
             });
         } catch (localError) {
             console.error("Local save failed", localError);
@@ -119,7 +121,7 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
                 salary_range: formData.salary_range,
                 description: formData.description,
                 accessibility_features: formData.accessibility_features,
-                requirements: [],
+                requirements: formData.requirements.split(',').map(r => r.trim()).filter(r => r !== ""),
                 is_active: true
             }]);
 
@@ -137,6 +139,7 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
                 category: "Technology",
                 job_type: "Full-time",
                 salary_range: "",
+                requirements: "",
                 description: "",
                 accessibility_features: [],
             });
@@ -272,12 +275,32 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             e.preventDefault();
-                                            descriptionRef.current?.focus();
-                                            speak("Salary set. Finally, give a brief description of the job duties.");
+                                            requirementsRef.current?.focus();
+                                            speak("Salary set. Now, what are the job requirements?");
                                         }
                                     }}
                                 />
                             </div>
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="requirements" className="font-semibold">Requirements</Label>
+                            <Textarea
+                                id="requirements"
+                                value={formData.requirements}
+                                ref={requirementsRef}
+                                onChange={e => setFormData({ ...formData, requirements: e.target.value })}
+                                onFocus={() => isVoiceMode && speak("Job requirements. Mention key skills needed, separated by commas.")}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        descriptionRef.current?.focus();
+                                        speak("Requirements set. Finally, give a brief description of the job duties.");
+                                    }
+                                }}
+                                className="min-h-[80px]"
+                                placeholder="e.g. React, Node.js, 3+ years experience (Separate with commas)"
+                            />
                         </div>
 
                         <div className="grid gap-2">

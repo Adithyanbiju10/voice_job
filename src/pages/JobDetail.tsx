@@ -25,7 +25,11 @@ const JobDetail = () => {
   const [existingApplication, setExistingApplication] = useState<any>(null);
   const hasReadDetailsRef = useRef(false);
   const { isVoiceMode, speak, listen, isAwake } = useVoice();
-  const { user } = useAuth();
+  const { user, registeredUsers } = useAuth();
+
+  const isVerifiedEmployer = registeredUsers.some(
+    (u: any) => u.role === 'employer' && u.name === job?.company && u.isVerified === true
+  );
 
   useEffect(() => {
     const fetch = async () => {
@@ -125,7 +129,9 @@ const JobDetail = () => {
         }
 
         hasReadDetailsRef.current = true;
-        await speak(`Job selected: ${job.title} at ${job.company}. Located in ${job.location}.`);
+        await speak("Job selected.");
+        await new Promise(r => setTimeout(r, 600)); // Distinct pause
+        await speak(`${job.title} at ${job.company}. Located in ${job.location}.`);
 
         let accessibilityInfo = "";
         if (job.accessibility_features && job.accessibility_features.length > 0) {
@@ -160,7 +166,6 @@ const JobDetail = () => {
 
       return () => {
         window.removeEventListener('voice-command', handleCommand);
-        window.speechSynthesis.cancel();
       };
     }
   }, [isVoiceMode, isAwake, job, user, alreadyApplied, existingApplication]);
@@ -196,7 +201,14 @@ const JobDetail = () => {
           <Badge variant="outline">{job.job_type}</Badge>
         </div>
         <h1 className="font-heading text-3xl font-bold">{job.title}</h1>
-        <p className="text-lg text-muted-foreground mt-1">{job.company}</p>
+        <div className="flex items-center gap-2 mt-1">
+          <p className="text-lg text-muted-foreground">{job.company}</p>
+          {isVerifiedEmployer && (
+            <Badge className="bg-success/15 text-success border-success/30 border gap-1 text-[10px] px-2 h-5">
+              <CheckCircle className="h-2.5 w-2.5" /> Verified Employer
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-8">

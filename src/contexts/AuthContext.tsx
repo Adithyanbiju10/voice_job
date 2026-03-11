@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { toast } from 'sonner';
 
 type Role = 'seeker' | 'employer' | 'admin';
 
@@ -21,6 +22,7 @@ interface AuthContextType {
     verifyEmployer: (employerId: string) => void;
     unverifyEmployer: (employerId: string) => void;
     getAllEmployers: () => User[];
+    registeredUsers: User[];
 }
 
 // A simple deterministic hash — good enough for a localStorage-backed demo.
@@ -38,6 +40,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [registeredUsers, setRegisteredUsers] = useState<User[]>([]);
 
     // Load user and seed registered users on mount
     useEffect(() => {
@@ -51,16 +54,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Seed demo users with known passwords if first time
-        const registeredUsers = localStorage.getItem('ability_jobs_registered_users');
-        if (!registeredUsers) {
+        const storedRegisteredUsers = localStorage.getItem('ability_jobs_registered_users');
+        if (!storedRegisteredUsers) {
             const demoUsers = [
                 { id: '1', name: 'Job Seeker', email: 'user@example.com', role: 'seeker' as Role, disability: 'none', isVerified: false, password: hashPassword('password123') },
                 { id: 'admin-001', name: 'Platform Admin', email: 'admin@abilityjobs.com', role: 'admin' as Role, disability: 'none', isVerified: true, password: hashPassword('admin123') }
             ];
             localStorage.setItem('ability_jobs_registered_users', JSON.stringify(demoUsers));
+            setRegisteredUsers(demoUsers);
         } else {
             // Migrate existing users: ensure every record has a password and admin always exists
-            const parsed: any[] = JSON.parse(registeredUsers);
+            const parsed: any[] = JSON.parse(storedRegisteredUsers);
             let changed = false;
 
             // Ensure admin exists
@@ -90,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (changed) {
                 localStorage.setItem('ability_jobs_registered_users', JSON.stringify(migrated));
             }
+            setRegisteredUsers(migrated);
         }
 
         setIsLoading(false);
@@ -100,18 +105,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         const handleStorageChange = (e: StorageEvent) => {
             if (e.key === 'ability_jobs_registered_users' && e.newValue) {
+                const updatedUsers: User[] = JSON.parse(e.newValue);
+                setRegisteredUsers(updatedUsers);
+
                 // Check if the currently logged-in user's record was updated
                 const currentSession = localStorage.getItem('ability_jobs_user');
                 if (!currentSession) return;
                 try {
                     const sessionUser: User = JSON.parse(currentSession);
-                    const updatedUsers: User[] = JSON.parse(e.newValue);
                     const freshRecord = updatedUsers.find(u => u.id === sessionUser.id);
                     if (freshRecord && freshRecord.isVerified !== sessionUser.isVerified) {
                         // Update the active session to reflect the new verification status
                         const { ...freshUser } = freshRecord;
                         setUser(freshUser as User);
                         localStorage.setItem('ability_jobs_user', JSON.stringify(freshUser));
+
+                        if (freshUser.isVerified) {
+                            toast.success("Your account has been verified by an admin!", {
+                                description: "You now have a verification badge on your profile and job listings."
+                            });
+                        } else {
+                            toast.warning("Your account verification has been revoked.", {
+                                description: "Please contact support if you believe this is an error."
+                            });
+                        }
                     }
                 } catch (err) {
                     console.error('Failed to sync session from storage event', err);
@@ -171,6 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Save to registered users list
         const updatedUsers = [...users, newUser];
         localStorage.setItem('ability_jobs_registered_users', JSON.stringify(updatedUsers));
+        setRegisteredUsers(updatedUsers as User[]);
 
         // Set as current user (without password in session)
         const { password: _, ...userWithoutPassword } = newUser;
@@ -184,13 +202,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const getAllEmployers = (): User[] => {
-        return getUsers().filter(u => u.role === 'employer');
+        return registeredUsers.filter(u => u.role === 'employer');
     };
 
     const verifyEmployer = (employerId: string) => {
         const users = getUsers();
         const updated = users.map(u => u.id === employerId ? { ...u, isVerified: true } : u);
         localStorage.setItem('ability_jobs_registered_users', JSON.stringify(updated));
+        setRegisteredUsers(updated as User[]);
         // If the currently logged-in employer is being verified, update their live session too
         if (user?.id === employerId) {
             const updatedUser = { ...user, isVerified: true };
@@ -215,6 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const users = getUsers();
         const updated = users.map(u => u.id === employerId ? { ...u, isVerified: false } : u);
         localStorage.setItem('ability_jobs_registered_users', JSON.stringify(updated));
+        setRegisteredUsers(updated as User[]);
         // Mirror the revocation to the employer's active session immediately
         if (user?.id === employerId) {
             const updatedUser = { ...user, isVerified: false };
@@ -235,7 +255,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     return (
-        <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, signup, logout, verifyEmployer, unverifyEmployer, getAllEmployers }}>
+        <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, signup, logout, verifyEmployer, unverifyEmployer, getAllEmployers, registeredUsers }}>
             {children}
         </AuthContext.Provider>
     );

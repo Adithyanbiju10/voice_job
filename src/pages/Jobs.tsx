@@ -230,6 +230,7 @@ const Jobs = () => {
       } else if (direction === 'select') {
         if (activeJobIndex >= 0 && activeJobIndex < filtered.length) {
           const job = filtered[activeJobIndex];
+          speak("Job selected.");
           navigate(`/jobs/${job.id}`);
         } else {
           speak("Please select a job first by saying next or back.");
@@ -249,14 +250,16 @@ const Jobs = () => {
       if (filtered.length > 0 && activeJobIndex === -1 && !hasAnnouncedRef.current) {
         hasAnnouncedRef.current = true;
         setTimeout(() => {
-          speak(`Navigating to browse jobs. You have ${filtered.length} number of jobs. Say "next" to start browsing, or say a job title to open it.`);
+          const intro = isVoiceMode
+            ? `Navigating to browse jobs. All the jobs listed here are for visually impaired users. You have ${filtered.length} matches. `
+            : `Navigating to browse jobs. You have ${filtered.length} number of jobs. `;
+          speak(`${intro}Say "next" to start browsing, or say a job title to open it.`);
         }, 1000);
       }
     }
 
     return () => {
       isAborted = true;
-      window.speechSynthesis.cancel();
       (window as any).__pendingVoiceMatches = null;
       window.removeEventListener('voice-command', handleCommand);
       window.removeEventListener('voice-search', handleSearch);
