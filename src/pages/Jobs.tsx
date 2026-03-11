@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -71,7 +71,7 @@ const Jobs = () => {
     if (query) setSearch(query);
   };
 
-  const filtered = jobs.filter(j => {
+  const filtered = useMemo(() => jobs.filter(j => {
     const matchSearch = !search || j.title.toLowerCase().includes(search.toLowerCase()) || j.company.toLowerCase().includes(search.toLowerCase());
     const matchCat = category === 'all' || j.category === category;
 
@@ -84,12 +84,19 @@ const Jobs = () => {
       j.accessibility_features.some(f => selectedDisability.features!.includes(f))
     );
     return matchSearch && matchCat && matchDisability;
-  });
+  }), [jobs, search, category, isVoiceMode, disabilityFilter]);
 
   const navigate = useNavigate();
 
   // Holds jobs waiting for disambiguation (user said a title matched by multiple companies)
   const [pendingMatches, setPendingMatches] = useState<typeof filtered>([]);
+  const [activeJobIndex, setActiveJobIndex] = useState(-1);
+
+  useEffect(() => {
+    setActiveJobIndex(-1);
+  }, [search, category, disabilityFilter]);
+
+  const hasAnnouncedRef = useRef(false);
 
   useEffect(() => {
     let isAborted = false;
@@ -148,7 +155,6 @@ const Jobs = () => {
         if (chosenJob) {
           (window as any).__pendingVoiceMatches = null;
           window.speechSynthesis.cancel();
-          speak(`Opening ${chosenJob.title} at ${chosenJob.company}.`);
           navigate(`/jobs/${chosenJob.id}`);
           return;
         } else {
@@ -176,7 +182,6 @@ const Jobs = () => {
         // User named both the title and the company — open it without asking
         isAborted = true;
         window.speechSynthesis.cancel();
-        speak(`Opening ${exactMatch.title} at ${exactMatch.company}.`);
         navigate(`/jobs/${exactMatch.id}`);
         return;
       }
@@ -185,7 +190,6 @@ const Jobs = () => {
         // Only one match — open it immediately
         isAborted = true;
         window.speechSynthesis.cancel();
-        speak(`Opening ${matches[0].title} at ${matches[0].company}.`);
         navigate(`/jobs/${matches[0].id}`);
       } else {
         // Multiple companies share this title — announce and ask user to choose
@@ -203,6 +207,36 @@ const Jobs = () => {
       }
     };
 
+    const handleNavigation = (e: any) => {
+      const direction = e.detail;
+      if (direction === 'next') {
+        setActiveJobIndex(prev => {
+          const nextIdx = prev + 1;
+          if (nextIdx < filtered.length) {
+            return nextIdx;
+          }
+          speak("You have reached the end of the list.");
+          return prev;
+        });
+      } else if (direction === 'back') {
+        setActiveJobIndex(prev => {
+          const backIdx = prev - 1;
+          if (backIdx >= 0) {
+            return backIdx;
+          }
+          speak("You are at the beginning of the list.");
+          return prev;
+        });
+      } else if (direction === 'select') {
+        if (activeJobIndex >= 0 && activeJobIndex < filtered.length) {
+          const job = filtered[activeJobIndex];
+          navigate(`/jobs/${job.id}`);
+        } else {
+          speak("Please select a job first by saying next or back.");
+        }
+      }
+    };
+
     if (isVoiceMode && isAwake && !loading) {
       // Clear any leftover pending matches when the page re-activates
       (window as any).__pendingVoiceMatches = null;
@@ -210,24 +244,13 @@ const Jobs = () => {
       window.addEventListener('voice-command', handleCommand);
       window.addEventListener('voice-search', handleSearch);
       window.addEventListener('voice-input', handleVoiceInput);
+      window.addEventListener('voice-navigation', handleNavigation);
 
-      if (filtered.length > 0) {
-        const readJobs = async () => {
-          await speak(`I found ${filtered.length} jobs. Say a job title anytime to open it, or "next" to continue.`);
-
-          for (let i = 0; i < filtered.length; i++) {
-            if (isAborted) break;
-            const job = filtered[i];
-            await speak(`${job.title} at ${job.company}.`);
-            for (let j = 0; j < 30; j++) {
-              if (isAborted) break;
-              await new Promise(r => setTimeout(r, 100));
-            }
-          }
-        };
-        readJobs();
-      } else {
-        speak("I couldn't find any jobs matching that filter.");
+      if (filtered.length > 0 && activeJobIndex === -1 && !hasAnnouncedRef.current) {
+        hasAnnouncedRef.current = true;
+        setTimeout(() => {
+          speak(`Navigating to browse jobs. You have ${filtered.length} number of jobs. Say "next" to start browsing, or say a job title to open it.`);
+        }, 1000);
       }
     }
 
@@ -238,8 +261,16 @@ const Jobs = () => {
       window.removeEventListener('voice-command', handleCommand);
       window.removeEventListener('voice-search', handleSearch);
       window.removeEventListener('voice-input', handleVoiceInput);
+      window.removeEventListener('voice-navigation', handleNavigation);
     };
-  }, [isVoiceMode, isAwake, loading, filtered.length, navigate]);
+  }, [isVoiceMode, isAwake, loading, filtered, activeJobIndex, navigate, speak]);
+
+  useEffect(() => {
+    if (isVoiceMode && isAwake && activeJobIndex >= 0 && activeJobIndex < filtered.length) {
+      const job = filtered[activeJobIndex];
+      speak(`${job.title} at ${job.company}. Please say select to open the job.`);
+    }
+  }, [activeJobIndex, isVoiceMode, isAwake, filtered, speak]);
 
 
   return (
@@ -316,7 +347,7 @@ const Jobs = () => {
           <p className="text-sm text-muted-foreground mb-4">{filtered.length} job{filtered.length !== 1 ? 's' : ''} found</p>
           <div className="grid gap-4">
             {filtered.map((job, i) => (
-              <JobCard key={job.id} job={job} index={i} />
+              <JobCard key={job.id} job={job} index={i} isActive={activeJobIndex === i} />
             ))}
           </div>
         </>

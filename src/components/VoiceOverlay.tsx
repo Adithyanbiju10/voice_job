@@ -21,7 +21,10 @@ const VoiceOverlay = () => {
               Voice assistance is available.<br />
               Press <span className="inline-block px-3 py-1 bg-primary text-primary-foreground rounded-lg shadow-md animate-pulse">Enter</span> now to enable full voice guidance.
             </p>
-            <p className="mt-6 text-sm text-muted-foreground italic">
+            <p className="mt-4 text-sm font-semibold text-primary/80 px-4 py-2 bg-primary/5 rounded-xl border border-primary/10">
+              Please disable your third party screen readers to access the website easily.
+            </p>
+            <p className="mt-4 text-sm text-muted-foreground italic">
               To continue without voice assistance, click anywhere.
             </p>
           </div>

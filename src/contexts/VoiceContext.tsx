@@ -291,7 +291,6 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return true;
     }
     if (matches(['jobs', 'careers', 'work', 'vacancies', 'opportunities', 'find a job', 'browse'])) {
-      speak('Opening the jobs section for you.');
       navigate('/jobs');
       return true;
     }
@@ -605,6 +604,11 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'back' }));
           resetAwakeTimer();
         },
+        'select': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'select' }));
+          resetAwakeTimer();
+        },
         'stop': () => {
           window.speechSynthesis.cancel();
           speak("Stopping.");
@@ -708,8 +712,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const pageName = location.pathname === '/' ? 'Home' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2);
 
-    // Skip generic announcement for Learning page as it has its own intro
-    if (location.pathname === '/learning') {
+    // Skip generic announcement for Learning and Jobs pages as they have their own intros
+    if (location.pathname === '/learning' || location.pathname === '/jobs') {
       return;
     }
 

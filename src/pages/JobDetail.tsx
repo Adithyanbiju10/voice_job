@@ -132,6 +132,11 @@ const JobDetail = () => {
           accessibilityInfo = `This workplace includes accessibility features such as: ${job.accessibility_features.join(', ')}. `;
         }
 
+        let requirementsInfo = "";
+        if (job.requirements && job.requirements.length > 0) {
+          requirementsInfo = `Requirements for this position include: ${job.requirements.join(', ')}. `;
+        }
+
         if (isAppliedNow && currentApp) {
           const appliedDate = new Date(currentApp.appliedAt).toLocaleDateString('en-US', {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -143,11 +148,11 @@ const JobDetail = () => {
                 ? 'Unfortunately, your application was rejected.'
                 : 'Your application is currently pending review.';
           await speak(
-            `Description: ${job.description}. ${accessibilityInfo}` +
+            `Description: ${job.description}. ${requirementsInfo}${accessibilityInfo}` +
             `Note: You have already applied for this job on ${appliedDate}. ${statusMsg} What can I do for you? Do you want to browse more jobs or go to home?`
           );
         } else {
-          await speak(`Description: ${job.description}. ${accessibilityInfo} Say 'apply' at any time to start your application.`);
+          await speak(`Description: ${job.description}. ${requirementsInfo}${accessibilityInfo} Say 'apply' at any time to start your application.`);
         }
       };
 

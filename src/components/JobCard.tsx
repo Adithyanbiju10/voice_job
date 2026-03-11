@@ -7,9 +7,10 @@ import type { Tables } from '@/integrations/supabase/types';
 interface JobCardProps {
   job: Tables<'jobs'>;
   index?: number;
+  isActive?: boolean;
 }
 
-const JobCard = ({ job, index = 0 }: JobCardProps) => {
+const JobCard = ({ job, index = 0, isActive = false }: JobCardProps) => {
   // Check if the employer who posted this job is verified
   const isVerifiedEmployer = (() => {
     try {
@@ -19,10 +20,15 @@ const JobCard = ({ job, index = 0 }: JobCardProps) => {
   })();
   return (
     <Link to={`/jobs/${job.id}`} aria-label={`View ${job.title} at ${job.company}`}>
-      <Card className="group cursor-pointer relative overflow-hidden border-border/50 bg-card/60 backdrop-blur-md transition-all duration-300 hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1 hover:border-primary/30"
+      <Card className={`group cursor-pointer relative overflow-hidden transition-all duration-300
+        ${isActive
+          ? 'ring-2 ring-primary border-primary shadow-xl shadow-primary/20 scale-[1.02] bg-primary/5'
+          : 'border-border/50 bg-card/60 backdrop-blur-md hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1 hover:border-primary/30'
+        }`}
         style={{ animationDelay: `${index * 80}ms` }}
       >
-        <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-primary to-accent transform scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100" />
+        <div className={`absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-primary to-accent transition-transform duration-300 
+          ${isActive ? 'scale-x-100' : 'scale-x-0 origin-left group-hover:scale-x-100'}`} />
         <CardContent className="p-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
