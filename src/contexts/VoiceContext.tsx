@@ -19,6 +19,8 @@ interface VoiceContextType {
   playCue: (type: 'wake' | 'success' | 'error' | 'click') => void;
   isFocusMode: boolean;
   setIsFocusMode: (v: boolean) => void;
+  isCapturingVoice: boolean;
+  setIsCapturingVoice: (v: boolean) => void;
 }
 
 const VoiceContext = createContext<VoiceContextType | null>(null);
@@ -38,6 +40,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isPrompting, setIsPrompting] = useState(false);
   const [isAwake, setIsAwake] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [isCapturingVoice, setIsCapturingVoice] = useState(false);
   const [lastHeard, setLastHeard] = useState("");
   const awakeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const speakingRef = useRef(false);
@@ -257,10 +260,17 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const processUniversalCommand = useCallback((text: string) => {
     setLastHeard(text);
     const input = text.toLowerCase().trim();
-    console.log('Processing universal command:', input);
+    console.log('Processing universal command:', input, 'isCapturingVoice:', isCapturingVoice);
 
     // Helper to check if input contains any of the keywords
     const matches = (keywords: string[]) => keywords.some(k => input.includes(k));
+
+    // Allow core dictation commands even when capturing voice
+    const isDictationControl = matches(['remove', 'clear', 'delete', 'yes', 'no', 'yeah', 'stop']);
+
+    if (isCapturingVoice && !isDictationControl) {
+      return false; // Swallow global navigation when specific capturing is active
+    }
 
     // 0. Voice Typing & Form Filling
     if (matches(['type', 'enter text', 'my name is', 'my email is', 'company is', 'write'])) {
@@ -395,6 +405,13 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
+
+    // Universal Resume Build/Attach Commands
+    if (matches(['voice resume', 'create resume', 'dictate resume', 'build resume', 'start resume', 'my resume', 'audio profile', 'setup resume', 'dictate', 'audio resume', 'resume'])) {
+      window.dispatchEvent(new CustomEvent('voice-command', { detail: 'voice resume' }));
+      return true;
+    }
+
     // B. PROFILE PAGE LOGIC
     if (path === '/profile') {
       if (matches(['sign out', 'logout', 'log out', 'goodbye'])) {
@@ -411,7 +428,6 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         window.dispatchEvent(new CustomEvent('voice-command', { detail: 'postings' }));
         return true;
       }
-
     }
 
     // C. AUTH PAGE LOGIC
@@ -446,18 +462,26 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      if (matches(['no', 'nah', 'not really', 'i am not', 'negative', 'nope', 'never', 'don\'t', 'stop it'])) {
-        if (path === '/learning') {
-          window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'no' }));
-          return true;
-        }
-
-        if (path.startsWith('/auth')) {
-          speak('Understood. Are you a job seeker or an employer?');
-          return true;
-        }
+      if (path.startsWith('/auth')) {
+        speak('Understood. Are you a job seeker or an employer?');
+        return true;
       }
+    }
 
+    // NEW: Handle dictation confirmations specifically for Profile page to prevent fallback interruptions
+    if (path === '/profile' && isCapturingVoice) {
+      if (matches(['yes', 'yeah', 'yup', 'correct', 'definitely', 'sure', 'affirmative', 'save it', 'it is correct', 'ya', 'yea', 'yep', 'ok', 'okay', 'that is correct', 'its correct'])) {
+        window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'yes' }));
+        return true;
+      }
+      if (matches(['no', 'nah', 'not really', 'incorrect', 'wrong', 'remove', 'clear', 'delete'])) {
+        if (matches(['remove', 'clear', 'delete'])) {
+          window.dispatchEvent(new CustomEvent('voice-command', { detail: 'remove' }));
+        } else {
+          window.dispatchEvent(new CustomEvent('voice-confirmation', { detail: 'no' }));
+        }
+        return true;
+      }
     }
 
 
@@ -518,6 +542,12 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
+    // NEW: Handle ApplyDialog and Profile specific commands to prevent 'still learning' fallback
+    if (matches(['upload', 'voice', 'resume', 'attach', 'selection', 'generated', 'create'])) {
+      // These are handled by internal listeners in Profile or ApplyDialog
+      return true;
+    }
+
     // 5. Fallback Logic (Helpful Nudges)
     if (input.length > 1) {
       resetAwakeTimer();
@@ -541,7 +571,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return true;
     }
     return false;
-  }, [navigate, speak, readPageContent, location.pathname, playCue]);
+  }, [navigate, speak, readPageContent, location.pathname, playCue, isCapturingVoice]);
 
   // Ref to hold the latest processing logic without triggering useEffect re-runs
   const processRef = useRef(processUniversalCommand);
@@ -609,6 +639,26 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           window.dispatchEvent(new CustomEvent('voice-navigation', { detail: 'select' }));
           resetAwakeTimer();
         },
+        'remove': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-command', { detail: 'remove' }));
+          resetAwakeTimer();
+        },
+        'remove it': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-command', { detail: 'remove' }));
+          resetAwakeTimer();
+        },
+        'clear': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-command', { detail: 'remove' }));
+          resetAwakeTimer();
+        },
+        'delete': () => {
+          if (speakingRef.current) return;
+          window.dispatchEvent(new CustomEvent('voice-command', { detail: 'remove' }));
+          resetAwakeTimer();
+        },
         'stop': () => {
           window.speechSynthesis.cancel();
           speak("Stopping.");
@@ -629,7 +679,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
           window.dispatchEvent(new CustomEvent('voice-input', { detail: text.toLowerCase().trim() }));
 
-          if (isAwakeRef.current) {
+          // Allow processing even if asleep IF we are in the middle of capturing voice (dictation)
+          if (isAwakeRef.current || isCapturingVoice) {
             const handled = processRef.current(text);
             if (handled) resetAwakeTimer();
           } else {
@@ -875,7 +926,9 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       },
       playCue,
       isFocusMode,
-      setIsFocusMode
+      setIsFocusMode,
+      isCapturingVoice,
+      setIsCapturingVoice
     }}>
       {children}
     </VoiceContext.Provider>

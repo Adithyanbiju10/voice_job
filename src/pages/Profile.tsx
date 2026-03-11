@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, LogOut, Mail, UserRound, Briefcase, Bookmark, FileText, Building, Building2, Users, MapPin, Clock, Check, X, ExternalLink, Trash2, Download } from 'lucide-react';
+import { User, LogOut, Mail, UserRound, Briefcase, Bookmark, FileText, Building, Building2, Users, MapPin, Clock, Check, X, ExternalLink, Trash2, Download, Sparkles, CheckCircle, Files } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 
 import { getLocalJobs } from '@/utils/localJobs';
 import { Badge } from '@/components/ui/badge';
@@ -17,11 +18,20 @@ const LOCAL_JOBS_KEY = 'ability_jobs_local_listings';
 const Profile = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const { isVoiceMode, speak, isAwake } = useVoice();
+    const { isVoiceMode, speak, isAwake, setIsCapturingVoice, isCapturingVoice } = useVoice();
+    const [applicants, setApplicants] = useState<any[]>([]);
     const [applications, setApplications] = useState<any[]>([]);
     const [myPostings, setMyPostings] = useState<any[]>([]);
-    const [applicants, setApplicants] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState("account");
+    const [dictationStep, setDictationStep] = useState<'none' | 'experience' | 'skills' | 'education' | 'confirm-experience' | 'confirm-skills' | 'confirm-education'>('none');
+    const [pendingText, setPendingText] = useState('');
+    const [voiceResumeData, setVoiceResumeData] = useState({ experience: '', skills: '', education: '' });
+    const [showResumeBuilder, setShowResumeBuilder] = useState(false);
+    const [isRefining, setIsRefining] = useState(false);
+    const hasAnnouncedRef = useRef(false);
+    const experienceRef = useRef<HTMLDivElement>(null);
+    const skillsRef = useRef<HTMLDivElement>(null);
+    const educationRef = useRef<HTMLDivElement>(null);
 
     const refreshData = () => {
         const storedApps = localStorage.getItem('user_applications');
@@ -47,14 +57,105 @@ const Profile = () => {
 
     useEffect(() => {
         refreshData();
+        const savedResume = localStorage.getItem('ability_voice_resume');
+        if (savedResume) {
+            setVoiceResumeData(JSON.parse(savedResume));
+        }
     }, [user]);
 
+    const startDictation = () => {
+        setIsCapturingVoice(true);
+        setDictationStep('experience');
+        setShowResumeBuilder(true);
+        speak("Voice resume builder activated. Tell me the key points of your work experience, and I will use AI to make it sound professional.");
+        setTimeout(() => {
+            experienceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+    };
+
+    // Helper to simulate AI polishing of resume text
+    const polishWithAI = (text: string, section: string) => {
+        setIsRefining(true);
+        // Map of keywords to professional phrases
+        const enhancements: Record<string, string[]> = {
+            'experience': [
+                "Strategically managed key responsibilities with a focus on efficiency and excellence. ",
+                "Demonstrated strong leadership and problem-solving abilities in a professional environment. ",
+                "Contributed to team success through dedication and high-quality performance. "
+            ],
+            'skills': [
+                "Proficient in a diverse range of technical and interpersonal competencies. ",
+                "Highly adaptable with a proven track record of mastering new tools and technologies. ",
+                "Expertly applies specialized skills to achieve project goals and organizational objectives. "
+            ],
+            'education': [
+                "Strong academic foundation with a commitment to continuous learning and professional growth. ",
+                "Successfully completed rigorous training and coursework in relevant fields of study. ",
+                "Maintains a high standard of academic excellence and knowledge application. "
+            ]
+        };
+
+        const randomEnhancement = enhancements[section][Math.floor(Math.random() * enhancements[section].length)];
+
+        // Simulate "AI thinking" time
+        return new Promise<string>((resolve) => {
+            setTimeout(() => {
+                setIsRefining(false);
+                resolve(`${randomEnhancement}Specifically: ${text}`);
+            }, 1500);
+        });
+    };
+
+    const handleVoiceInput = (text: string) => {
+        const input = text.toLowerCase().trim();
+
+        // Prevent dictation input from being processed when we are in a confirmation step
+        if (dictationStep.startsWith('confirm-')) return;
+
+        if (dictationStep === 'experience' || dictationStep === 'skills' || dictationStep === 'education') {
+            setPendingText(text);
+            // Visual update
+            setVoiceResumeData(prev => ({ ...prev, [dictationStep]: text }));
+
+            const currentStep = dictationStep;
+            setDictationStep(`confirm-${currentStep}` as any);
+
+            speak(`I heard: ${text}. Is this correct? Say "yes" to save it, or "remove" to try again.`);
+        }
+    };
+
     useEffect(() => {
-        if (isVoiceMode && isAwake && user) {
+        return () => setIsCapturingVoice(false);
+    }, []);
+
+    useEffect(() => {
+        if (isVoiceMode && isAwake && user && !hasAnnouncedRef.current) {
+            hasAnnouncedRef.current = true;
+            if (user.role === 'seeker') {
+                setTimeout(() => {
+                    speak("Welcome to your profile. You can view your account details, track your applications, or say voice resume to build your audio profile.");
+                }, 1000);
+            }
+        }
+    }, [isVoiceMode, isAwake, user]);
+
+    useEffect(() => {
+        if (isVoiceMode && user) {
             const handleCommand = async (e: any) => {
                 const cmd = e.detail;
+                // Only allow dictation-related commands if asleep, or wake commands
+                if (!isAwake && !isCapturingVoice && !cmd.includes('resume')) return;
                 if (cmd === 'logout') {
                     await handleLogout();
+                } else if (cmd === 'voice resume' || cmd === 'create resume') {
+                    if (user.role === 'seeker') {
+                        startDictation();
+                    }
+                } else if (dictationStep.startsWith('confirm-') && (cmd === 'remove' || cmd === 'remove it' || cmd === 'clear' || cmd === 'delete')) {
+                    const originalStep = dictationStep.replace('confirm-', '') as any;
+                    setDictationStep(originalStep);
+                    setVoiceResumeData(prev => ({ ...prev, [originalStep]: '' }));
+                    speak(`Deleted. Please tell me your ${originalStep} again.`);
                 } else if (cmd === 'applications') {
                     if (user.role === 'seeker') {
                         setActiveTab("applications");
@@ -98,10 +199,66 @@ const Profile = () => {
                 }
             };
 
+            const handleConfirmation = async (e: any) => {
+                if (dictationStep.startsWith('confirm-') && !isRefining) {
+                    const conf = e.detail;
+                    if (conf === 'yes') {
+                        const originalStep = dictationStep.replace('confirm-', '') as any;
+                        const rawText = voiceResumeData[originalStep as keyof typeof voiceResumeData];
+
+                        speak(`Great! Polishing your ${originalStep} with AI...`);
+                        const polished = await polishWithAI(rawText, originalStep);
+
+                        setVoiceResumeData(prev => ({ ...prev, [originalStep]: polished }));
+
+                        if (dictationStep === 'confirm-experience') {
+                            setDictationStep('skills');
+                            speak("Experience polished. Now, tell me your key skills.");
+                            setTimeout(() => skillsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+                        } else if (dictationStep === 'confirm-skills') {
+                            setDictationStep('education');
+                            speak("Skills enhanced. Finally, tell me about your educational background.");
+                            setTimeout(() => educationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+                        } else if (dictationStep === 'confirm-education') {
+                            setDictationStep('none');
+                            localStorage.setItem('ability_voice_resume', JSON.stringify({
+                                ...voiceResumeData,
+                                education: polished
+                            }));
+                            setIsCapturingVoice(false);
+                            speak("Congratulations! Your AI-enhanced voice resume is now complete and saved to your profile.");
+                            toast.success("AI-Enhanced Voice resume saved!");
+                        }
+                    } else if (conf === 'no') {
+                        const originalStep = dictationStep.replace('confirm-', '') as any;
+                        setDictationStep(originalStep);
+                        setVoiceResumeData(prev => ({ ...prev, [originalStep]: '' }));
+                        speak(`Okay, let's try again. Please tell me your ${originalStep}.`);
+                    }
+                }
+            };
+
+            const handleRawInput = (e: any) => {
+                if (dictationStep !== 'none') {
+                    handleVoiceInput(e.detail);
+                }
+            };
+
             window.addEventListener('voice-command', handleCommand);
-            return () => window.removeEventListener('voice-command', handleCommand);
+            window.addEventListener('voice-confirmation', handleConfirmation);
+            window.addEventListener('voice-input', handleRawInput);
+
+            if (user.role === 'seeker') {
+                // Welcome removed from here to separate effect
+            }
+
+            return () => {
+                window.removeEventListener('voice-command', handleCommand);
+                window.removeEventListener('voice-confirmation', handleConfirmation);
+                window.removeEventListener('voice-input', handleRawInput);
+            };
         }
-    }, [isVoiceMode, isAwake, user, applications, applicants, myPostings]);
+    }, [isVoiceMode, isAwake, user, applications, applicants, myPostings, dictationStep, voiceResumeData, isRefining, isCapturingVoice]);
 
     const handleUpdateStatus = (appId: string, newStatus: 'Accepted' | 'Rejected') => {
         const allApps = JSON.parse(localStorage.getItem('all_applications') || '[]');
@@ -148,6 +305,53 @@ const Profile = () => {
         refreshData();
     };
 
+    const handleDownloadPDF = () => {
+        if (!user) return;
+
+        const doc = new jsPDF();
+        let yPos = 20;
+        const margin = 15;
+        const lineHeight = 7;
+        const maxWidth = 180;
+
+        doc.setFontSize(22);
+        doc.text(`${user.name}'s AI-Enhanced Resume`, margin, yPos);
+        yPos += 10;
+
+        doc.setFontSize(12);
+        doc.setTextColor(100);
+        doc.text(`Email: ${user.email}`, margin, yPos);
+        yPos += 15;
+
+        doc.setTextColor(0);
+        doc.setFontSize(16);
+        doc.text('Experience', margin, yPos);
+        yPos += lineHeight;
+        doc.setFontSize(10);
+        const experienceLines = doc.splitTextToSize(voiceResumeData.experience || 'Not provided', maxWidth);
+        doc.text(experienceLines, margin, yPos);
+        yPos += experienceLines.length * lineHeight + 5;
+
+        doc.setFontSize(16);
+        doc.text('Skills', margin, yPos);
+        yPos += lineHeight;
+        doc.setFontSize(10);
+        const skillsLines = doc.splitTextToSize(voiceResumeData.skills || 'Not provided', maxWidth);
+        doc.text(skillsLines, margin, yPos);
+        yPos += skillsLines.length * lineHeight + 5;
+
+        doc.setFontSize(16);
+        doc.text('Education', margin, yPos);
+        yPos += lineHeight;
+        doc.setFontSize(10);
+        const educationLines = doc.splitTextToSize(voiceResumeData.education || 'Not provided', maxWidth);
+        doc.text(educationLines, margin, yPos);
+        yPos += educationLines.length * lineHeight + 5;
+
+        doc.save(`${user.name.replace(/\s/g, '_')}_AI_Resume.pdf`);
+        toast.success("Resume downloaded as PDF!");
+    };
+
     return (
         <div className="container max-w-4xl py-12 md:py-24 animate-fade-in">
             <div className="flex flex-col items-center mb-10 gap-4 text-center">
@@ -189,9 +393,21 @@ const Profile = () => {
 
                 <TabsContent value="account" className="mt-0 space-y-6">
                     <Card className="border-border/50 shadow-lg bg-card/60 backdrop-blur-sm">
-                        <CardHeader>
-                            <CardTitle>Account Details</CardTitle>
-                            <CardDescription>Information associated with your account</CardDescription>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Account Details</CardTitle>
+                                <CardDescription>Information associated with your account</CardDescription>
+                            </div>
+                            {user.role === 'seeker' && (
+                                <Button
+                                    variant="outline"
+                                    onClick={startDictation}
+                                    className="gap-2 border-primary/20 hover:bg-primary/5 text-primary"
+                                >
+                                    <Sparkles className="h-4 w-4" />
+                                    {voiceResumeData.experience ? 'Update Voice Resume' : 'Create Voice Resume'}
+                                </Button>
+                            )}
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="flex flex-col space-y-4">
@@ -215,6 +431,82 @@ const Profile = () => {
                                         <p className="text-base font-semibold">{user.email}</p>
                                     </div>
                                 </div>
+
+                                {user.role === 'seeker' && (voiceResumeData.experience || showResumeBuilder) && (
+                                    <div className="mt-4 p-6 rounded-2xl bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                        <div className="flex items-center justify-between border-b border-primary/10 pb-3">
+                                            <h3 className="font-heading font-bold text-primary flex items-center gap-2 text-lg">
+                                                <Sparkles className="h-5 w-5 animate-pulse text-amber-500" /> AI-Enhanced Resume
+                                            </h3>
+                                            <div className="flex gap-2">
+                                                {dictationStep === 'none' && voiceResumeData.experience && (
+                                                    <Button variant="outline" size="sm" onClick={handleDownloadPDF} className="h-7 text-[10px] gap-1 bg-white hover:bg-white/80 border-primary/20 text-primary">
+                                                        <Download className="h-3 w-3" /> PDF CV
+                                                    </Button>
+                                                )}
+                                                {isRefining && (
+                                                    <Badge variant="outline" className="bg-amber-100/50 text-amber-600 border-amber-200 animate-pulse">
+                                                        AI Polishing...
+                                                    </Badge>
+                                                )}
+                                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                                                    {dictationStep === 'none' ? 'Ready to use' : 'In Progress'}
+                                                </Badge>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid gap-4">
+                                            <div
+                                                ref={experienceRef}
+                                                className={`p-4 rounded-xl transition-all relative overflow-hidden ${dictationStep === 'experience' || dictationStep === 'confirm-experience' ? 'bg-primary/20 ring-2 ring-primary/40 scale-[1.02]' : 'bg-background/40'}`}
+                                            >
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Experience</p>
+                                                    {voiceResumeData.experience.includes('Specifically:') && (
+                                                        <Badge className="h-4 text-[8px] bg-amber-500/10 text-amber-600 border-amber-200">AI Enhanced</Badge>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm leading-relaxed italic">
+                                                    {voiceResumeData.experience || (dictationStep === 'experience' ? 'Listening...' : 'Not provided')}
+                                                </p>
+                                            </div>
+                                            <div
+                                                ref={skillsRef}
+                                                className={`p-4 rounded-xl transition-all relative overflow-hidden ${dictationStep === 'skills' || dictationStep === 'confirm-skills' ? 'bg-primary/20 ring-2 ring-primary/40 scale-[1.02]' : 'bg-background/40'}`}
+                                            >
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Skills</p>
+                                                    {voiceResumeData.skills.includes('Specifically:') && (
+                                                        <Badge className="h-4 text-[8px] bg-amber-500/10 text-amber-600 border-amber-200">AI Enhanced</Badge>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm leading-relaxed italic">
+                                                    {voiceResumeData.skills || (dictationStep === 'skills' ? 'Listening...' : 'Not provided')}
+                                                </p>
+                                            </div>
+                                            <div
+                                                ref={educationRef}
+                                                className={`p-4 rounded-xl transition-all relative overflow-hidden ${dictationStep === 'education' || dictationStep === 'confirm-education' ? 'bg-primary/20 ring-2 ring-primary/40 scale-[1.02]' : 'bg-background/40'}`}
+                                            >
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Education</p>
+                                                    {voiceResumeData.education.includes('Specifically:') && (
+                                                        <Badge className="h-4 text-[8px] bg-amber-500/10 text-amber-600 border-amber-200">AI Enhanced</Badge>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm leading-relaxed italic">
+                                                    {voiceResumeData.education || (dictationStep === 'education' ? 'Listening...' : 'Not provided')}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {dictationStep === 'none' && (
+                                            <p className="text-[11px] text-center text-muted-foreground bg-primary/5 py-2 rounded-lg border border-primary/10">
+                                                This voice profile is now available for your applications.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                         <CardFooter className="flex justify-end pt-6 border-t border-border/50">

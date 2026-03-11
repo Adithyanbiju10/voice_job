@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { Badge } from '@/components/ui/badge';
 import { Upload, Loader2, CheckCircle, User, FileText, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
@@ -12,6 +13,7 @@ import { useVoice } from '@/contexts/VoiceContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import annyang from 'annyang';
+import { jsPDF } from 'jspdf';
 
 interface ApplyDialogProps {
   open: boolean;
@@ -33,6 +35,8 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [alreadyApplied, setAlreadyApplied] = useState(false);
+  const [useVoiceResume, setUseVoiceResume] = useState(false);
+  const [hasVoiceResume, setHasVoiceResume] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submitButtonRef = useRef<HTMLButtonElement>(null);
@@ -50,6 +54,10 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
       );
       const duplicate = !!existingApp;
       setAlreadyApplied(duplicate);
+
+      // Check for saved voice resume
+      const savedVoiceResume = localStorage.getItem('ability_voice_resume');
+      setHasVoiceResume(!!savedVoiceResume);
 
       if (isVoiceMode && isAwake && !success) {
         if (duplicate && existingApp) {
@@ -69,7 +77,11 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
             `You cannot submit another application for this role.`
           );
         } else {
-          speak(`Applying for ${jobTitle}. First, please type a short pitch about yourself in the first field and press Enter.`);
+          let msg = `Applying for ${jobTitle}. First, please type a short pitch about yourself in the first field and press Enter. `;
+          if (savedVoiceResume) {
+            msg += "I see you have a voice resume saved in your profile. Would you like to use it? You can just say 'Yes' or 'use voice resume'.";
+          }
+          speak(msg);
         }
       }
     } else if (open && isVoiceMode && isAwake && !success) {
@@ -133,11 +145,89 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
   const handlePitchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && isVoiceMode) {
       e.preventDefault();
-      speak("Pitch entered. Now, please upload your resume by clicking the upload button.");
-      fileInputRef.current?.click();
+      if (!useVoiceResume) {
+        speak("Pitch entered. Would you like to upload a new resume or use your voice generated resume? You can say 'upload new' or 'use voice resume'.");
+      } else {
+        speak("Pitch entered. I will use your saved voice resume for this application. Press Enter or say 'send' to submit.");
+        setTimeout(() => submitButtonRef.current?.focus(), 500);
+      }
     }
     speakCharacter(e);
   };
+
+  const handleUploadLocal = () => {
+    setUseVoiceResume(false);
+    if (isVoiceMode) {
+      speak("Please use your screen reader to navigate the file explorer. Once you have selected your file, you can turn off the screen reader and return to the application.");
+      // Small delay to allow the voice to finish before the explorer window steals focus
+      setTimeout(() => {
+        fileInputRef.current?.click();
+      }, 1000);
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  useEffect(() => {
+    const commands = {
+      'use my voice resume': () => handleSelectVoiceResume(),
+      'use voice resume': () => handleSelectVoiceResume(),
+      'voice resume': () => handleSelectVoiceResume(),
+      'voice': () => handleSelectVoiceResume(),
+      'my voice': () => handleSelectVoiceResume(),
+      'audio resume': () => handleSelectVoiceResume(),
+      'generated resume': () => handleSelectVoiceResume(),
+      'resume': () => handleSelectVoiceResume(),
+      'attach resume': () => handleSelectVoiceResume(),
+      'yes use it': () => handleSelectVoiceResume(),
+      'attach': () => handleSelectVoiceResume(),
+      'upload new resume': () => handleUploadLocal(),
+      'upload file': () => handleUploadLocal(),
+      'select file': () => handleUploadLocal(),
+      'upload new': () => handleUploadLocal(),
+      'send application': () => !alreadyApplied && !loading && handleSubmit(),
+      'submit': () => !alreadyApplied && !loading && handleSubmit(),
+    };
+
+    const handleSelectVoiceResume = () => {
+      if (hasVoiceResume) {
+        setUseVoiceResume(true);
+        speak("Voice resume selected. I'll use your profile's voice resume.");
+      } else {
+        speak("You don't have a voice resume saved yet. You can create one in your profile.");
+      }
+    };
+
+    const handleConfirmation = (e: any) => {
+      if (e.detail === 'yes' && hasVoiceResume && !useVoiceResume) {
+        handleSelectVoiceResume();
+      }
+    };
+
+    const handleVoiceCommand = (e: any) => {
+      if (e.detail === 'voice resume' || e.detail === 'resume') {
+        handleSelectVoiceResume();
+      } else if (e.detail === 'upload') {
+        handleUploadLocal();
+      }
+    };
+
+    window.addEventListener('voice-confirmation', handleConfirmation);
+    window.addEventListener('voice-command', handleVoiceCommand);
+
+    const annyangLib = annyang as any;
+    if (annyangLib && open) {
+      annyangLib.addCommands(commands);
+    }
+
+    return () => {
+      window.removeEventListener('voice-confirmation', handleConfirmation);
+      window.removeEventListener('voice-command', handleVoiceCommand);
+      if (annyangLib) {
+        annyangLib.removeCommands(Object.keys(commands));
+      }
+    };
+  }, [open, hasVoiceResume, alreadyApplied, loading, useVoiceResume]);
 
   // Speaks each character aloud for visually impaired users
   const speakCharacter = (e: React.KeyboardEvent) => {
@@ -180,7 +270,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
       return;
     }
 
-    if (!file) {
+    if (!file && !useVoiceResume) {
       toast({ title: 'Please upload your resume', variant: 'destructive' });
       if (isVoiceMode) speak('Please upload your resume to continue.');
       return;
@@ -191,8 +281,8 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
       let resumeUrl: string | null = null;
       let uploadSuccessful = false;
 
-      // Only attempt Supabase upload if it's NOT a mock job
-      if (!jobId.startsWith('mock-')) {
+      // Only attempt Supabase upload if it's NOT a mock job and we have a physical file
+      if (!jobId.startsWith('mock-') && file && !useVoiceResume) {
         try {
           const ext = file.name.split('.').pop();
           const path = `${crypto.randomUUID()}.${ext}`;
@@ -209,8 +299,6 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
           console.warn('Supabase storage unavailable, using local tracking only.');
         }
 
-        // Only try to insert into DB if we are reasonably sure Supabase is working
-        // or just try it and ignore if it fails (we have localStorage fallback anyway)
         try {
           const { error: dbError } = await supabase.from('applications').insert({
             job_id: jobId,
@@ -223,7 +311,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
         } catch (dbErr) {
           console.warn('Supabase DB unavailable.');
         }
-      } else {
+      } else if (jobId.startsWith('mock-')) {
         // Mock jobs: simulate delay
         await new Promise(resolve => setTimeout(resolve, 800));
         resumeUrl = 'https://example.com/mock-resume.pdf';
@@ -236,16 +324,68 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
 
       // Also store file as base64 data URI so employers can open it directly (works offline/demo)
       let resumeData: string | null = null;
-      const resumeFilename: string = file.name;
-      try {
-        resumeData = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-      } catch {
-        console.warn('Could not read file as base64.');
+      let resumeFilenameHeader: string = useVoiceResume ? 'AI-Generated Voice Resume.pdf' : (file?.name || 'Resume');
+
+      if (useVoiceResume) {
+        // Generate PDF from Voice Resume Data
+        const savedResume = JSON.parse(localStorage.getItem('ability_voice_resume') || '{}');
+        const doc = new jsPDF();
+
+        // Header
+        doc.setFontSize(22);
+        doc.setTextColor(63, 81, 181); // Primary color
+        doc.text(name || 'Applicant Profile', 20, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(email || '', 20, 26);
+        doc.text(`Generated by Ability Jobs AI Assistant - ${new Date().toLocaleDateString()}`, 20, 31);
+
+        doc.setLineWidth(0.5);
+        doc.line(20, 35, 190, 35);
+
+        let y = 45;
+
+        // Sections
+        const addSection = (title: string, content: string) => {
+          if (!content) return;
+          doc.setFontSize(14);
+          doc.setTextColor(33, 33, 33);
+          doc.setFont('helvetica', 'bold');
+          doc.text(title, 20, y);
+          y += 7;
+
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(66, 66, 66);
+
+          // Wrap text
+          const splitContent = doc.splitTextToSize(content, 170);
+          doc.text(splitContent, 20, y);
+          y += (splitContent.length * 5) + 10;
+        };
+
+        addSection('PROFESSIONAL EXPERIENCE', savedResume.experience);
+        addSection('CORE SKILLS', savedResume.skills);
+        addSection('EDUCATIONAL BACKGROUND', savedResume.education);
+
+        // Pitch/Cover Letter if exists
+        if (coverLetter) {
+          addSection('PERSONAL PITCH', coverLetter);
+        }
+
+        resumeData = doc.output('datauristring');
+      } else if (file) {
+        try {
+          resumeData = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        } catch {
+          console.warn('Could not read file as base64.');
+        }
       }
 
       // Save application to localStorage for Profile visibility
@@ -261,7 +401,8 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
         status: 'Pending',
         resume_url: resumeUrl,
         resume_data: resumeData,
-        resume_filename: resumeFilename,
+        resume_filename: resumeFilenameHeader,
+        voice_resume: useVoiceResume ? JSON.parse(localStorage.getItem('ability_voice_resume') || '{}') : null,
       };
 
       const existingApps = JSON.parse(localStorage.getItem('user_applications') || '[]');
@@ -389,30 +530,68 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
                       className="bg-secondary/30 border-primary/10 focus:border-primary/50 transition-all rounded-xl resize-none"
                     />
                   </div>
-                  <div>
-                    <Label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 ml-1">
-                      <Upload className="h-3 w-3" /> Resume / CV <span className="text-destructive ml-1">*</span>
-                    </Label>
-                    <div className="relative group">
-                      <label
-                        className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed transition-all cursor-pointer p-6 
-                        ${file ? 'border-success/50 bg-success/5 text-success' : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground hover:text-primary'}
-                        ${isVoiceMode ? 'focus-within:ring-2 focus-within:ring-primary/50' : ''}
-                      `}>
-                        <div className={`p-3 rounded-full ${file ? 'bg-success/20' : 'bg-secondary'} group-hover:scale-110 transition-transform`}>
-                          {file ? <CheckCircle className="h-6 w-6" /> : <Upload className="h-6 w-6" />}
+                  <div className="space-y-4">
+                    {hasVoiceResume && (
+                      <div className="flex p-1 bg-muted/50 rounded-lg border border-border/50">
+                        <button
+                          onClick={handleUploadLocal}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md transition-all text-xs font-bold uppercase tracking-wider
+                            ${!useVoiceResume ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          <Upload className="h-3 w-3" /> Upload New
+                        </button>
+                        <button
+                          onClick={() => setUseVoiceResume(true)}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md transition-all text-xs font-bold uppercase tracking-wider
+                            ${useVoiceResume ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          <Sparkles className="h-3 w-3" /> Use Voice Resume
+                        </button>
+                      </div>
+                    )}
+
+                    {!useVoiceResume ? (
+                      <div>
+                        <Label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 ml-1">
+                          <Upload className="h-3 w-3" /> Resume / CV <span className="text-destructive ml-1">*</span>
+                        </Label>
+                        <div className="relative group">
+                          <label
+                            className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed transition-all cursor-pointer p-6 
+                            ${file ? 'border-success/50 bg-success/5 text-success' : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground hover:text-primary'}
+                            ${isVoiceMode ? 'focus-within:ring-2 focus-within:ring-primary/50' : ''}
+                          `}>
+                            <div className={`p-3 rounded-full ${file ? 'bg-success/20' : 'bg-secondary'} group-hover:scale-110 transition-transform`}>
+                              {file ? <CheckCircle className="h-6 w-6" /> : <Upload className="h-6 w-6" />}
+                            </div>
+                            <span className="text-sm font-medium text-center">{file ? file.name : 'Click to Upload Resume'}</span>
+                            <span className="text-[10px] opacity-70">PDF, DOC up to 5MB</span>
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              accept=".pdf,.doc,.docx"
+                              className="hidden"
+                              onChange={handleFileChange}
+                            />
+                          </label>
                         </div>
-                        <span className="text-sm font-medium">{file ? file.name : 'Click to Upload Resume'}</span>
-                        <span className="text-[10px] opacity-70">PDF, DOC up to 5MB</span>
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          accept=".pdf,.doc,.docx"
-                          className="hidden"
-                          onChange={handleFileChange}
-                        />
-                      </label>
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="p-5 rounded-2xl bg-success/5 border border-success/20 flex flex-col items-center text-center gap-3 animate-in zoom-in-95 duration-300">
+                        <div className="p-3 bg-success/20 rounded-full">
+                          <CheckCircle className="h-8 w-8 text-success" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-foreground">Voice Resume Selected</h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Your saved voice resume from your profile will be used for this application.
+                          </p>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => navigate('/profile')} className="text-[10px] uppercase font-bold text-primary hover:bg-primary/5">
+                          Edit Profile Resume
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
