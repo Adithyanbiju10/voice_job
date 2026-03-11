@@ -17,17 +17,27 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { PlusCircle, Loader2, ShieldAlert, Lock } from "lucide-react";
+import { PlusCircle, Loader2, ShieldAlert, Lock, CheckCircle2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { saveLocalJob } from "@/utils/localJobs";
 
-const accessibilityOptions = [
-    "Screen reader compatible",
-    "Voice dictation",
-    "Captions provided",
-    "Accessible office",
-    "Remote work",
-    "Flexible hours",
-    "Service animals welcome",
+const groupedAccessibilityOptions = [
+    {
+        label: "Visually Impaired",
+        features: ["Screen reader compatible", "Voice dictation", "Voice coding tools", "Voice interaction"]
+    },
+    {
+        label: "Hearing Impaired",
+        features: ["Captions provided", "ASL Interpreters provided", "Sign language support", "Text-based communication"]
+    },
+    {
+        label: "Physically Challenged",
+        features: ["Accessible office", "Service animals welcome", "Adaptive keyboards", "Ergonomic setup", "Wheelchair accessible"]
+    },
+    {
+        label: "Cognitive / Learning",
+        features: ["Flexible hours", "Remote work", "Flexible deadlines", "Quiet workspace"]
+    }
 ];
 
 const JOB_CATEGORIES = [
@@ -324,21 +334,42 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
                         </div>
 
 
-                        <div className="space-y-3">
-                            <Label className="text-sm font-semibold">Accessibility Features</Label>
-                            <div className="flex flex-wrap gap-2">
-                                {accessibilityOptions.map(option => (
-                                    <button
-                                        key={option}
-                                        type="button"
-                                        onClick={() => toggleAccessibility(option)}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all ${formData.accessibility_features.includes(option)
-                                            ? "bg-primary border-primary text-primary-foreground"
-                                            : "bg-secondary border-transparent text-muted-foreground"
-                                            }`}
-                                    >
-                                        {option}
-                                    </button>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-sm font-semibold">Accessibility & Disability Support</Label>
+                                <div className="flex gap-2">
+                                    {groupedAccessibilityOptions.map(group => {
+                                        const hasMatch = group.features.some(f => formData.accessibility_features.includes(f));
+                                        if (!hasMatch) return null;
+                                        return (
+                                            <Badge key={group.label} className="text-[9px] bg-success/10 text-success border-success/20">
+                                                {group.label} Match
+                                            </Badge>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 rounded-xl border border-border/50 bg-secondary/10 p-4">
+                                {groupedAccessibilityOptions.map(group => (
+                                    <div key={group.label} className="space-y-2">
+                                        <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/70">{group.label}</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {group.features.map(option => (
+                                                <button
+                                                    key={option}
+                                                    type="button"
+                                                    onClick={() => toggleAccessibility(option)}
+                                                    className={`px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all ${formData.accessibility_features.includes(option)
+                                                        ? "bg-primary border-primary text-primary-foreground shadow-sm"
+                                                        : "bg-background border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                                                        }`}
+                                                >
+                                                    {option}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         </div>

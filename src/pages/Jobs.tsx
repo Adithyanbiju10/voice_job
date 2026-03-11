@@ -86,6 +86,8 @@ const Jobs = () => {
     return matchSearch && matchCat && matchDisability;
   }), [jobs, search, category, isVoiceMode, disabilityFilter]);
 
+  const activeFilterId = isVoiceMode ? 'blind' : disabilityFilter;
+
   const navigate = useNavigate();
 
   // Holds jobs waiting for disambiguation (user said a title matched by multiple companies)
@@ -207,6 +209,18 @@ const Jobs = () => {
       }
     };
 
+    const handleFilterCommand = (e: any) => {
+      const text = e.detail.toLowerCase();
+      const found = disabilityTypes.find(d =>
+        text.includes(d.label.toLowerCase()) ||
+        (d.id !== 'all' && text.includes(d.id))
+      );
+      if (found) {
+        setDisabilityFilter(found.id);
+        speak(`Filtering for ${found.label} accessibility.`);
+      }
+    };
+
     const handleNavigation = (e: any) => {
       const direction = e.detail;
       if (direction === 'next') {
@@ -246,6 +260,7 @@ const Jobs = () => {
       window.addEventListener('voice-search', handleSearch);
       window.addEventListener('voice-input', handleVoiceInput);
       window.addEventListener('voice-navigation', handleNavigation);
+      window.addEventListener('voice-input', handleFilterCommand);
 
       if (filtered.length > 0 && activeJobIndex === -1 && !hasAnnouncedRef.current) {
         hasAnnouncedRef.current = true;
@@ -297,12 +312,12 @@ const Jobs = () => {
               key={id}
               onClick={() => setDisabilityFilter(id)}
               className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all
-                ${disabilityFilter === id
+                ${activeFilterId === id
                   ? `${color} ring-2 ring-offset-2 ring-offset-background ring-primary/50 shadow-md scale-105`
                   : 'border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               aria-label={`Filter by ${label}`}
-              aria-pressed={disabilityFilter === id}
+              aria-pressed={activeFilterId === id}
             >
               <Icon className="h-4 w-4" />
               {label}
