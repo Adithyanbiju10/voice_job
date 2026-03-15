@@ -56,7 +56,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
       setAlreadyApplied(duplicate);
 
       // Check for saved voice resume
-      const savedVoiceResume = localStorage.getItem('ability_voice_resume');
+      const savedVoiceResume = user ? localStorage.getItem(`ability_voice_resume_${user.email}`) : null;
       setHasVoiceResume(!!savedVoiceResume);
 
       if (isVoiceMode && isAwake && !success) {
@@ -328,7 +328,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
 
       if (useVoiceResume) {
         // Generate PDF from Voice Resume Data
-        const savedResume = JSON.parse(localStorage.getItem('ability_voice_resume') || '{}');
+        const savedResume = user ? JSON.parse(localStorage.getItem(`ability_voice_resume_${user.email}`) || '{}') : {};
         const doc = new jsPDF();
 
         // Header
@@ -402,7 +402,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
         resume_url: resumeUrl,
         resume_data: resumeData,
         resume_filename: resumeFilenameHeader,
-        voice_resume: useVoiceResume ? JSON.parse(localStorage.getItem('ability_voice_resume') || '{}') : null,
+        voice_resume: (useVoiceResume && user) ? JSON.parse(localStorage.getItem(`ability_voice_resume_${user.email}`) || '{}') : null,
       };
 
       const existingApps = JSON.parse(localStorage.getItem('user_applications') || '[]');

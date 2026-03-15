@@ -57,9 +57,11 @@ const Profile = () => {
 
     useEffect(() => {
         refreshData();
-        const savedResume = localStorage.getItem('ability_voice_resume');
-        if (savedResume) {
-            setVoiceResumeData(JSON.parse(savedResume));
+        if (user) {
+            const savedResume = localStorage.getItem(`ability_voice_resume_${user.email}`);
+            if (savedResume) {
+                setVoiceResumeData(JSON.parse(savedResume));
+            }
         }
     }, [user]);
 
@@ -221,10 +223,12 @@ const Profile = () => {
                             setTimeout(() => educationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
                         } else if (dictationStep === 'confirm-education') {
                             setDictationStep('none');
-                            localStorage.setItem('ability_voice_resume', JSON.stringify({
-                                ...voiceResumeData,
-                                education: polished
-                            }));
+                            if (user) {
+                                localStorage.setItem(`ability_voice_resume_${user.email}`, JSON.stringify({
+                                    ...voiceResumeData,
+                                    education: polished
+                                }));
+                            }
                             setIsCapturingVoice(false);
                             speak("Congratulations! Your AI-enhanced voice resume is now complete and saved to your profile.");
                             toast.success("AI-Enhanced Voice resume saved!");
@@ -662,12 +666,32 @@ const Profile = () => {
                                                             </div>
                                                             {/* View CV button */}
                                                             {app.resume_data ? (
-                                                                <button
+                                                                 <button
                                                                     onClick={() => {
-                                                                        const w = window.open();
-                                                                        if (w) {
-                                                                            w.document.write(`<html><head><title>${app.resume_filename || 'Resume'}</title></head><body style="margin:0"><embed src="${app.resume_data}" width="100%" height="100%" /></body></html>`);
-                                                                            w.document.close();
+                                                                        try {
+                                                                            if (app.resume_data.startsWith('data:application/pdf')) {
+                                                                                // Extract base64 part, ignoring any potential headers like filename=...
+                                                                                const base64Content = app.resume_data.split(',')[1];
+                                                                                const binaryString = window.atob(base64Content);
+                                                                                const bytes = new Uint8Array(binaryString.length);
+                                                                                for (let i = 0; i < binaryString.length; i++) {
+                                                                                    bytes[i] = binaryString.charCodeAt(i);
+                                                                                }
+                                                                                const blob = new Blob([bytes], { type: 'application/pdf' });
+                                                                                const blobUrl = URL.createObjectURL(blob);
+                                                                                window.open(blobUrl, '_blank');
+                                                                            } else {
+                                                                                const w = window.open();
+                                                                                if (w) {
+                                                                                    w.document.write(`<html><head><title>${app.resume_filename || 'Resume'}</title></head><body style="margin:0;overflow:hidden;"><iframe src="${app.resume_data}" width="100%" height="100%" style="border:none;"></iframe></body></html>`);
+                                                                                    w.document.close();
+                                                                                }
+                                                                            }
+                                                                        } catch (err) {
+                                                                            console.error('Error opening CV:', err);
+                                                                            // Final fallback
+                                                                            const w = window.open();
+                                                                            if (w) w.location.href = app.resume_data;
                                                                         }
                                                                     }}
                                                                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors"
