@@ -14,14 +14,15 @@ const features = [
 import { useAuth } from '@/contexts/AuthContext';
 
 const Index = () => {
-  const { isVoiceMode, speak, isAwake } = useVoice();
+  const { isVoiceMode, speak, isAwake, skipGlobalNextRef } = useVoice();
   const { user } = useAuth();
 
   useEffect(() => {
     if (isVoiceMode && isAwake && !user) {
-      speak("Welcome to Ability Jobs. You are currently not signed in. Please say sign in to log in and sign up to create an account.");
+      if (skipGlobalNextRef) skipGlobalNextRef.current = true;
+      speak("Welcome to Ability Jobs. Here you can explore learning resources and message with our community, or browse accessible job vacancies. You are currently not signed in. Please say sign in to log in and sign up to create an account.");
     }
-  }, [isVoiceMode, isAwake, user]);
+  }, [isVoiceMode, isAwake, user, skipGlobalNextRef]);
 
   return (
     <main>

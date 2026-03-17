@@ -156,8 +156,7 @@ const Jobs = () => {
 
         if (chosenJob) {
           (window as any).__pendingVoiceMatches = null;
-          window.speechSynthesis.cancel();
-          navigate(`/jobs/${chosenJob.id}`);
+          speak(`Opening ${chosenJob.title}`).then(() => navigate(`/jobs/${chosenJob.id}`));
           return;
         } else {
           speak('Sorry, I did not catch that. Please say a number or the company name to choose a job.');
@@ -183,16 +182,14 @@ const Jobs = () => {
       if (exactMatch) {
         // User named both the title and the company — open it without asking
         isAborted = true;
-        window.speechSynthesis.cancel();
-        navigate(`/jobs/${exactMatch.id}`);
+        speak(`Opening ${exactMatch.title} at ${exactMatch.company}`).then(() => navigate(`/jobs/${exactMatch.id}`));
         return;
       }
 
       if (matches.length === 1) {
         // Only one match — open it immediately
         isAborted = true;
-        window.speechSynthesis.cancel();
-        navigate(`/jobs/${matches[0].id}`);
+        speak(`Opening ${matches[0].title}`).then(() => navigate(`/jobs/${matches[0].id}`));
       } else {
         // Multiple companies share this title — announce and ask user to choose
         isAborted = true;
@@ -244,8 +241,7 @@ const Jobs = () => {
       } else if (direction === 'select') {
         if (activeJobIndex >= 0 && activeJobIndex < filtered.length) {
           const job = filtered[activeJobIndex];
-          speak("Job selected.");
-          navigate(`/jobs/${job.id}`);
+          speak("Job selected. Redirecting...").then(() => navigate(`/jobs/${job.id}`));
         } else {
           speak("Please select a job first by saying next or back.");
         }
@@ -268,7 +264,7 @@ const Jobs = () => {
           const intro = isVoiceMode
             ? `Navigating to browse jobs. All the jobs listed here are for visually impaired users. You have ${filtered.length} matches. `
             : `Navigating to browse jobs. You have ${filtered.length} number of jobs. `;
-          speak(`${intro}Say "next" to start browsing, or say a job title to open it.`);
+          speak(`${intro}Say "next" to start browsing.`);
         }, 1000);
       }
     }

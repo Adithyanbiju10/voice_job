@@ -69,6 +69,7 @@ export type Database = {
           requirements: string[] | null
           salary_range: string | null
           title: string
+          employer_email: string | null
         }
         Insert: {
           accessibility_features?: string[] | null
@@ -83,6 +84,7 @@ export type Database = {
           requirements?: string[] | null
           salary_range?: string | null
           title: string
+          employer_email?: string | null
         }
         Update: {
           accessibility_features?: string[] | null
@@ -97,6 +99,7 @@ export type Database = {
           requirements?: string[] | null
           salary_range?: string | null
           title?: string
+          employer_email?: string | null
         }
         Relationships: []
       }

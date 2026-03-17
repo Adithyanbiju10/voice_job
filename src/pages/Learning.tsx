@@ -130,8 +130,9 @@ const Learning = () => {
                 window.speechSynthesis.cancel();
                 setIsAwake(true);
                 stopReadingRef.current = false;
-                await speak("Learning Center. Say select or yes to open. You can also say next or back.");
-                setCurrentIndex(0);
+                const count = filteredResources.length;
+                await speak(`Learning Center. You have ${count} resources available. Say "next" to start browsing.`);
+                setCurrentIndex(-1);
             };
             startInduction();
         }
@@ -155,19 +156,11 @@ const Learning = () => {
                 // Small delay to ensure synthesis state is cleared
                 await new Promise(r => setTimeout(r, 100));
 
-                await speak(`${resource.title}.`);
+                await speak(`${resource.title}. Please say select to open this resource, or next to see more.`);
                 setIsAwake(true);
 
                 // Clear previous timer if any
                 if (timerRef.current) clearTimeout(timerRef.current);
-
-                // Set timer for auto-advancing to next resource
-                // Increased to 6 seconds to give user more time to react
-                timerRef.current = setTimeout(() => {
-                    if (!stopReadingRef.current) {
-                        setCurrentIndex(prev => prev + 1);
-                    }
-                }, 6000);
             };
 
             readResource();
@@ -176,6 +169,28 @@ const Learning = () => {
             setCurrentIndex(-1);
         }
     }, [currentIndex, isVoiceMode, filteredResources, setIsAwake, speak]);
+    
+    const handleOpenResource = (resource: any) => {
+        if (!resource) return;
+        stopReadingRef.current = true;
+        isReturningFromOpenRef.current = true;
+        if (timerRef.current) clearTimeout(timerRef.current);
+
+        const url = resource.url;
+        window.speechSynthesis.cancel();
+        speak(`Opening ${resource.title}`);
+
+        const win = window.open(url, '_blank', 'noopener,noreferrer');
+        if (!win || win.closed || typeof win.closed === 'undefined') {
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
 
     useEffect(() => {
         const handleNavigation = (e: any) => {
@@ -184,10 +199,26 @@ const Learning = () => {
 
             if (direction === 'next') {
                 if (timerRef.current) clearTimeout(timerRef.current);
-                setCurrentIndex(prev => prev + 1);
+                setCurrentIndex(prev => {
+                    const nextIdx = prev + 1;
+                    if (nextIdx < filteredResources.length) return nextIdx;
+                    speak("You have reached the end of the resources.");
+                    return prev;
+                });
             } else if (direction === 'back') {
                 if (timerRef.current) clearTimeout(timerRef.current);
-                setCurrentIndex(prev => Math.max(0, prev - 1));
+                setCurrentIndex(prev => {
+                    const backIdx = prev - 1;
+                    if (backIdx >= 0) return backIdx;
+                    speak("You are at the beginning of the list.");
+                    return prev;
+                });
+            } else if (direction === 'select') {
+                if (currentIndex >= 0 && currentIndex < filteredResources.length) {
+                    handleOpenResource(filteredResources[currentIndex]);
+                } else {
+                    speak("Please navigate to a resource first by saying next.");
+                }
             }
         };
 
@@ -196,27 +227,7 @@ const Learning = () => {
             const type = e.detail; // 'yes' or 'no' from the voice-confirmation event
 
             if (type === 'yes') {
-                if (currentResourceRef.current) {
-                    stopReadingRef.current = true;
-                    isReturningFromOpenRef.current = true;
-                    if (timerRef.current) clearTimeout(timerRef.current);
-
-                    const url = currentResourceRef.current.url;
-                    const win = window.open(url, '_blank', 'noopener,noreferrer');
-
-                    window.speechSynthesis.cancel();
-                    speak(`Opening ${currentResourceRef.current.title}`);
-
-                    if (!win || win.closed || typeof win.closed === 'undefined') {
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.target = '_blank';
-                        link.rel = 'noopener noreferrer';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                    }
-                }
+                handleOpenResource(currentResourceRef.current);
             } else if (type === 'no') {
                 if (timerRef.current) clearTimeout(timerRef.current);
                 setCurrentIndex(prev => prev + 1);
@@ -257,34 +268,12 @@ const Learning = () => {
             );
 
             if (resource) {
-                stopReadingRef.current = true;
-                isReturningFromOpenRef.current = true;
-
                 // Update currentIndex to the index of the resource found (if in filtered list)
                 const resIdx = filteredResources.findIndex(r => r.id === resource.id);
                 if (resIdx !== -1) {
                     setCurrentIndex(resIdx);
                 }
-
-                const url = resource.url;
-
-                // Priority 1: Open immediately
-                const win = window.open(url, '_blank', 'noopener,noreferrer');
-
-                // Priority 2: Feedback
-                window.speechSynthesis.cancel();
-                speak(`Opening ${resource.title}`);
-
-                // Fallback: If blocked
-                if (!win || win.closed || typeof win.closed === 'undefined') {
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.target = '_blank';
-                    link.rel = 'noopener noreferrer';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                }
+                handleOpenResource(resource);
             } else {
                 speak(`I couldn't find a resource titled ${query}. Try saying the title as it appears on the screen.`);
             }
@@ -329,8 +318,13 @@ const Learning = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredResources.map(resource => (
-                        <Card key={resource.id} className="group transition-all hover:shadow-lg border-border/50 flex flex-col h-full bg-card/40 overflow-hidden">
+                    {filteredResources.map((resource, index) => (
+                        <Card 
+                            key={resource.id} 
+                            className={`group transition-all duration-300 border-border/50 flex flex-col h-full bg-card/40 overflow-hidden ${
+                                currentIndex === index ? 'ring-2 ring-primary shadow-lg scale-[1.02] bg-primary/5' : 'hover:shadow-lg'
+                            }`}
+                        >
                             <CardHeader className="pb-3">
                                 <div className="flex justify-between items-start gap-3 mb-2">
                                     <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 text-[10px] uppercase tracking-wider font-bold">

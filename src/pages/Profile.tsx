@@ -12,13 +12,14 @@ import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useVoice } from '@/contexts/VoiceContext';
+import { supabase } from '@/integrations/supabase/client';
 
 const LOCAL_JOBS_KEY = 'ability_jobs_local_listings';
 
 const Profile = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const { isVoiceMode, speak, isAwake, setIsCapturingVoice, isCapturingVoice } = useVoice();
+    const { isVoiceMode, speak, isAwake, setIsCapturingVoice, isCapturingVoice, skipGlobalNextRef } = useVoice();
     const [applicants, setApplicants] = useState<any[]>([]);
     const [applications, setApplications] = useState<any[]>([]);
     const [myPostings, setMyPostings] = useState<any[]>([]);
@@ -50,8 +51,36 @@ const Profile = () => {
 
         if (user?.role === 'employer') {
             const local = getLocalJobs();
-            const filtered = local.filter(j => j.company === user.name);
-            setMyPostings(filtered);
+            // Show jobs where either company matches name OR employer_email matches email
+            const filteredLocal = local.filter(j => j.company === user.name || j.employer_email === user.email);
+            
+            // Also fetch from Supabase
+            const fetchCloudJobs = async () => {
+                try {
+                    const { data, error } = await supabase
+                        .from('jobs')
+                        .select('*')
+                        .eq('employer_email', user.email);
+                    
+                    if (!error && data) {
+                        // Deduplicate: only add local jobs that aren't already in the cloud
+                        const combined = [...data];
+                        filteredLocal.forEach(localJob => {
+                            const isDuplicate = data.some(cloudJob => 
+                                cloudJob.title === localJob.title && 
+                                cloudJob.company === localJob.company
+                            );
+                            if (!isDuplicate) combined.push(localJob);
+                        });
+                        setMyPostings(combined);
+                    } else {
+                        setMyPostings(filteredLocal);
+                    }
+                } catch (e) {
+                    setMyPostings(filteredLocal);
+                }
+            };
+            fetchCloudJobs();
         }
     };
 
@@ -133,13 +162,17 @@ const Profile = () => {
     useEffect(() => {
         if (isVoiceMode && isAwake && user && !hasAnnouncedRef.current) {
             hasAnnouncedRef.current = true;
-            if (user.role === 'seeker') {
-                setTimeout(() => {
-                    speak("Welcome to your profile. You can view your account details, track your applications, or say voice resume to build your audio profile.");
-                }, 1000);
-            }
+            
+            const profileWelcome = user.role === 'seeker'
+                ? "You are now on your profile. Here you can chat with employers and access learning resources, or say 'voice resume' to build your audio CV."
+                : "You are now on your company profile. You can message applicants and review resources, or manage your job postings here.";
+            
+            setTimeout(() => {
+                if (skipGlobalNextRef) skipGlobalNextRef.current = true;
+                speak(profileWelcome);
+            }, 1200);
         }
-    }, [isVoiceMode, isAwake, user]);
+    }, [isVoiceMode, isAwake, user, speak]);
 
     useEffect(() => {
         if (isVoiceMode && user) {
@@ -293,19 +326,57 @@ const Profile = () => {
         navigate('/');
     };
 
-    const handleDeletePosting = (jobId: string) => {
-        const local = getLocalJobs();
-        const updated = local.filter(j => j.id !== jobId);
-        localStorage.setItem(LOCAL_JOBS_KEY, JSON.stringify(updated));
-        toast.success("Job posting removed");
+    const handleDeletePosting = async (jobId: string) => {
+        // 1. Handle Local Storage deletion
+        if (jobId.startsWith('local-')) {
+            const local = getLocalJobs();
+            const updated = local.filter(j => j.id !== jobId);
+            localStorage.setItem(LOCAL_JOBS_KEY, JSON.stringify(updated));
+            toast.success("Local job posting removed");
+        } else {
+            // 2. Handle Supabase deletion
+            try {
+                const { error } = await supabase
+                    .from('jobs')
+                    .delete()
+                    .eq('id', jobId);
+
+                if (error) throw error;
+                toast.success("Job posting deleted from database");
+            } catch (error) {
+                console.error("Failed to delete from database:", error);
+                toast.error("Could not delete from database. Please try again.");
+                return; // Don't refresh if it failed
+            }
+        }
+        
         refreshData();
     };
 
-    const handleDeleteAllPostings = () => {
+    const handleDeleteAllPostings = async () => {
+        // 1. Clear Local Storage postings for this company
         const local = getLocalJobs();
-        const remaining = local.filter(j => j.company !== user?.name);
+        const remaining = local.filter(j => j.company !== user?.name && j.employer_email !== user?.email);
         localStorage.setItem(LOCAL_JOBS_KEY, JSON.stringify(remaining));
-        toast.success("All your postings have been deleted");
+
+        // 2. Clear Supabase postings for this employer
+        if (user?.email) {
+            try {
+                const { error } = await supabase
+                    .from('jobs')
+                    .delete()
+                    .eq('employer_email', user.email);
+
+                if (error) throw error;
+                toast.success("All your postings have been deleted from local storage and database");
+            } catch (error) {
+                console.error("Failed to delete all from database:", error);
+                toast.warning("Local storage cleared, but database deletion failed.");
+            }
+        } else {
+            toast.success("All your local postings have been deleted");
+        }
+        
         refreshData();
     };
 

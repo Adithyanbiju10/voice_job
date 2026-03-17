@@ -46,12 +46,12 @@ const LoginNotifier = () => {
         visits[user.email] = new Date().toISOString();
         localStorage.setItem(LAST_VISIT_KEY, JSON.stringify(visits));
 
-        // Give the "Navigated to Home page" announcement time to finish (approx 3.5s)
+        // Give the "Navigated to Home page" and Welcome guidance time to finish (approx 10s)
         const timer = setTimeout(async () => {
             // Run checks sequentially to prevent voice overlap
             await checkApplicationUpdates({ userName: user.name, userEmail: user.email, shouldSpeak, isBlind, speak });
             await checkNewJobs({ userName: user.name, userEmail: user.email, lastVisitISO, shouldSpeak, isBlind, speak });
-        }, 4000);
+        }, 10000);
 
         return () => clearTimeout(timer);
     }, [user, isVoiceMode, speak]);

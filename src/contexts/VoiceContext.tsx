@@ -21,6 +21,7 @@ interface VoiceContextType {
   setIsFocusMode: (v: boolean) => void;
   isCapturingVoice: boolean;
   setIsCapturingVoice: (v: boolean) => void;
+  skipGlobalNextRef: React.MutableRefObject<boolean>;
 }
 
 const VoiceContext = createContext<VoiceContextType | null>(null);
@@ -48,6 +49,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const isFirstVoiceActivationRef = useRef(false); // tracks first Enter-press activation
   const isVoiceModeRef = useRef(isVoiceMode);
   const manualRecognitionRef = useRef<any>(null);
+  const skipGlobalNextRef = useRef(false);
 
   useEffect(() => {
     isVoiceModeRef.current = isVoiceMode;
@@ -99,7 +101,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  const speak = useCallback((text: string): Promise<void> => {
+  const speak = useCallback((text: string, interrupt: boolean = false): Promise<void> => {
     return new Promise((resolve) => {
       if (!('speechSynthesis' in window)) { resolve(); return; }
 
@@ -108,7 +110,10 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         annyangLib.abort(); // Hard stop listening when we start speaking
       }
 
-      window.speechSynthesis.cancel();
+      if (interrupt) {
+        window.speechSynthesis.cancel();
+      }
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.95; // Slightly faster but clearer
       utterance.pitch = 1;
@@ -122,7 +127,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const currentId = speakCounterRef.current;
 
       const finishSpeaking = () => {
-        // 800ms silence buffer so the mic doesn't pick up TTS tail audio
+        // 1200ms silence buffer so the mic doesn't pick up TTS tail audio
         setTimeout(() => {
           // If another utterance has superseded this one, let that one handle it.
           if (speakCounterRef.current !== currentId) {
@@ -136,7 +141,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             annyangLib.start({ autoRestart: true, continuous: false });
           }
           resolve();
-        }, 800);
+        }, 1200);
       };
 
       utterance.onend = finishSpeaking;
@@ -296,27 +301,23 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // 1. Navigation Intents
     if (matches(['home', 'main page', 'index', 'landing', 'start over'])) {
-      speak('Heading back to the home page.');
-      navigate('/');
+      speak('Heading back to the home page.').then(() => navigate('/'));
       return true;
     }
     if (matches(['jobs', 'careers', 'work', 'vacancies', 'opportunities', 'find a job', 'browse'])) {
-      navigate('/jobs');
+      speak('Opening job vacancies.').then(() => navigate('/jobs'));
       return true;
     }
     if (matches(['profile', 'my account', 'settings', 'personal info', 'dashboard'])) {
-      speak('Navigating to your profile.');
-      navigate('/profile');
+      speak('Navigating to your profile.').then(() => navigate('/profile'));
       return true;
     }
     if (matches(['learning', 'resources', 'tutorials', 'training', 'education', 'guides'])) {
-      speak('Opening the learning center. You can find guides on screen readers and career tips here.');
-      navigate('/learning');
+      speak('Opening the learning center. You can find guides on screen readers and career tips here.').then(() => navigate('/learning'));
       return true;
     }
     if (matches(['messages', 'communications', 'inbox']) || (matches(['chat']) && !matches(['voice chat']))) {
-      speak('Opening your messages.');
-      navigate('/messages');
+      speak('Opening your messages.').then(() => navigate('/messages'));
       return true;
     }
     if (matches(['sign in', 'login', 'log in', 'access my account'])) {
@@ -353,8 +354,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return true;
     }
     if (matches(['stop', 'be quiet', 'cancel', 'shut up', 'silence', 'enough'])) {
-      window.speechSynthesis.cancel();
-      speak('Stopping all audio.');
+      speak('Stopping all audio.', true);
       return true;
     }
     if (matches(['go to sleep', 'goodbye', 'bye', 'standard mode', 'later', 'sleep'])) {
@@ -367,8 +367,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return true;
     }
     if (matches(['back', 'previous', 'go back', 'return'])) {
-      speak('Going back.');
-      navigate(-1);
+      speak('Going back.').then(() => navigate(-1));
       return true;
     }
     if (matches(['post a job', 'create a job', 'new job posting', 'add a job'])) {
@@ -775,12 +774,20 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (!isVoiceMode) return;
 
+    // If a page has its own specialized welcome, it will skip this generic one
+    if (skipGlobalNextRef.current) {
+      skipGlobalNextRef.current = false;
+      playCue('success'); // Still play the navigation click sound
+      return;
+    }
+
     playCue('success');
 
     // If this is the very first voice activation (user just pressed Enter),
     // speak the welcome + wake-word message instead of the page heading.
     if (isFirstVoiceActivationRef.current) {
       isFirstVoiceActivationRef.current = false;
+      skipGlobalNextRef.current = true; // Block page-specific welcomes for the very first greeting
       setTimeout(() => {
         speak('Welcome to Ability Jobs. Please say Hey Ability to wake the voice assistant.');
       }, 300);
@@ -954,7 +961,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isFocusMode,
       setIsFocusMode,
       isCapturingVoice,
-      setIsCapturingVoice
+      setIsCapturingVoice,
+      skipGlobalNextRef
     }}>
       {children}
     </VoiceContext.Provider>

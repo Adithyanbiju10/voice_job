@@ -20,7 +20,7 @@ const Auth = () => {
     const [searchParams] = useSearchParams();
     const mode = searchParams.get('mode');
     const [activeTab, setActiveTab] = useState(mode === "signup" ? "signup" : "login");
-    const { isVoiceMode, speak, isAwake, setIsAwake } = useVoice();
+    const { isVoiceMode, speak, isAwake, setIsAwake, skipGlobalNextRef } = useVoice();
 
     const { login, signup } = useAuth();
     const navigate = useNavigate();
@@ -140,12 +140,14 @@ const Auth = () => {
                 if (activeTab === "login") {
                     // Tell the user to enter their email and focus the field automatically
                     setTimeout(() => {
+                        if (skipGlobalNextRef) skipGlobalNextRef.current = true;
                         speak("Welcome back. Please enter your email address to sign in. If you want to create a new account, say sign up.");
                         setIsAwake(true);
                         setTimeout(() => focusWithPulse(loginEmailRef), 600);
                     }, 800);
                 } else {
                     setTimeout(() => {
+                        if (skipGlobalNextRef) skipGlobalNextRef.current = true;
                         speak("Welcome to our platform. Before we begin, are you visually impaired? Please say yes or no.");
                         setIsAwake(true);
                     }, 800);
@@ -219,11 +221,14 @@ const Auth = () => {
                 });
                 const redirectPath = isAdmin ? "/admin" : "/";
                 if (isVoiceMode) {
-                    if (isBlind) {
-                        speak("You are successfully logged in.").then(() => navigate(redirectPath));
-                    } else {
-                        speak(isAdmin ? `Welcome Admin. Redirecting to admin dashboard.` : `Welcome back! Redirecting to home page.`).then(() => navigate(redirectPath));
-                    }
+                    const welcomeText = isAdmin 
+                        ? "Welcome back, Admin. Your dashboard is ready. Redirecting you now."
+                        : `Login successful! Welcome to Ability Jobs. You are now logged in as ${loggedInUser?.name || 'a seeker'}. Once you are ready, you can say "learning" to explore resources, "messages" to chat with others, or "browse jobs" to find opportunities. Your journey to a new career starts here.`;
+                    
+                    speak(welcomeText).then(() => {
+                        if (skipGlobalNextRef) skipGlobalNextRef.current = true;
+                        navigate(redirectPath);
+                    });
                 } else {
                     navigate(redirectPath);
                 }
@@ -276,9 +281,21 @@ const Auth = () => {
                 description: `Welcome to AbilityJobs, ${name}!`,
             });
             if (isVoiceMode) {
-                speak(`Account created successfully! Welcome ${name}. Taking you to your profile.`);
+                const signupWelcomeChunks = [
+                    `Account created successfully! A warm welcome to our community, ${name}.`,
+                    `We are taking you to your profile to get started.`,
+                    `Once you are ready, you can say "learning" to access resources, "messages" to chat with others, or "browse jobs" to search for vacancies.`,
+                    `We are glad to have you here.`
+                ];
+                
+                const fullWelcome = signupWelcomeChunks.join(" ");
+                speak(fullWelcome).then(() => {
+                    if (skipGlobalNextRef) skipGlobalNextRef.current = true;
+                    navigate("/profile");
+                });
+            } else {
+                navigate("/profile");
             }
-            navigate("/profile");
         }, 1200);
     };
 

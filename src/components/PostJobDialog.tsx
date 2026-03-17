@@ -102,25 +102,9 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
         }
 
         setLoading(true);
+        let cloudSuccess = false;
 
-        // 1. ALWAYS Save locally first
-        try {
-            saveLocalJob({
-                title: formData.title,
-                company: formData.company,
-                location: formData.location || "Remote",
-                category: formData.category,
-                job_type: formData.job_type,
-                salary_range: formData.salary_range,
-                description: formData.description,
-                accessibility_features: formData.accessibility_features,
-                requirements: formData.requirements.split(',').map(r => r.trim()).filter(r => r !== "")
-            });
-        } catch (localError) {
-            console.error("Local save failed", localError);
-        }
-
-        // 2. Attempt to save to Supabase
+        // 1. Attempt to save to Supabase (Primary)
         try {
             const { error } = await supabase.from('jobs').insert([{
                 title: formData.title,
@@ -132,33 +116,57 @@ export function PostJobDialog({ onJobPosted }: { onJobPosted: () => void }) {
                 description: formData.description,
                 accessibility_features: formData.accessibility_features,
                 requirements: formData.requirements.split(',').map(r => r.trim()).filter(r => r !== ""),
-                is_active: true
+                is_active: true,
+                employer_email: user.email
             }]);
 
+            if (error) throw error;
+            
+            cloudSuccess = true;
             toast.success("Job published successfully!");
             if (isVoiceMode) speak("Congratulations! Your job posting has been successfully published.");
-
-            setOpen(false);
-            onJobPosted();
-
-            // Reset form
-            setFormData({
-                title: "",
-                company: user?.name || "",
-                location: "",
-                category: "Technology",
-                job_type: "Full-time",
-                salary_range: "",
-                requirements: "",
-                description: "",
-                accessibility_features: [],
-            });
         } catch (error: any) {
-            toast.success("Job published successfully!");
-            setOpen(false);
-            onJobPosted();
+            console.error("Supabase insertion failed, falling back to local storage:", error);
+            
+            // 2. FALLBACK to local storage only if cloud fails
+            try {
+                saveLocalJob({
+                    title: formData.title,
+                    company: formData.company,
+                    location: formData.location || "Remote",
+                    category: formData.category,
+                    job_type: formData.job_type,
+                    salary_range: formData.salary_range,
+                    description: formData.description,
+                    accessibility_features: formData.accessibility_features,
+                    requirements: formData.requirements.split(',').map(r => r.trim()).filter(r => r !== ""),
+                    employer_email: user.email
+                });
+                toast.success("Job saved locally (Database unavailable)");
+                if (isVoiceMode) speak("Cloud storage is currently unavailable, so I've saved your job locally on this device.");
+                cloudSuccess = true; // Still a success for the user
+            } catch (localError) {
+                toast.error("Failed to save job. Please check your connection.");
+                if (isVoiceMode) speak("I'm sorry, I couldn't save your job posting. Please try again later.");
+            }
         } finally {
             setLoading(false);
+            if (cloudSuccess) {
+                setOpen(false);
+                onJobPosted();
+                // Reset form
+                setFormData({
+                    title: "",
+                    company: user?.name || "",
+                    location: "",
+                    category: "Technology",
+                    job_type: "Full-time",
+                    salary_range: "",
+                    requirements: "",
+                    description: "",
+                    accessibility_features: [],
+                });
+            }
         }
     };
 

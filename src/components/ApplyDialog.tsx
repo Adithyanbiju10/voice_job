@@ -146,7 +146,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
     if (e.key === 'Enter' && isVoiceMode) {
       e.preventDefault();
       if (!useVoiceResume) {
-        speak("Pitch entered. Would you like to upload a new resume or use your voice generated resume? You can say 'upload new' or 'use voice resume'.");
+        speak("Pitch entered. You can now use your voice generated resume for this application. Just say 'use voice resume' to attach it.");
       } else {
         speak("Pitch entered. I will use your saved voice resume for this application. Press Enter or say 'send' to submit.");
         setTimeout(() => submitButtonRef.current?.focus(), 500);
@@ -158,8 +158,7 @@ const ApplyDialog = ({ open, onOpenChange, jobId, jobTitle, employerName }: Appl
   const handleUploadLocal = () => {
     setUseVoiceResume(false);
     if (isVoiceMode) {
-      speak("Please use your screen reader to navigate the file explorer. Once you have selected your file, you can turn off the screen reader and return to the application.");
-      // Small delay to allow the voice to finish before the explorer window steals focus
+      // Logic for file selection is still present for non-voice users, but we avoid the voice prompt for file explorer as requested
       setTimeout(() => {
         fileInputRef.current?.click();
       }, 1000);

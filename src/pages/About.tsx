@@ -17,13 +17,14 @@ const values = [
 ];
 
 const About = () => {
-  const { isVoiceMode, speak } = useVoice();
+  const { isVoiceMode, speak, skipGlobalNextRef } = useVoice();
 
   useEffect(() => {
     if (isVoiceMode) {
-      speak('About Ability Jobs. We are an inclusive job platform built for people of all abilities. Say "jobs" to browse jobs, or "home" to go back.');
+      if (skipGlobalNextRef) skipGlobalNextRef.current = true;
+      speak('About Ability Jobs. We are an inclusive job platform. You can explore learning resources and message employers, or browse open jobs. Say "home" to go back.');
     }
-  }, [isVoiceMode]);
+  }, [isVoiceMode, skipGlobalNextRef]);
 
   return (
     <main>

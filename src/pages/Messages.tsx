@@ -36,7 +36,7 @@ const ALL_APPS_KEY = 'all_applications';
 
 const Messages = () => {
     const { user } = useAuth();
-    const { isVoiceMode, speak } = useVoice();
+    const { isVoiceMode, speak, setIsCapturingVoice } = useVoice();
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [activeContact, setActiveContact] = useState<Contact | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -193,6 +193,7 @@ const Messages = () => {
         if (isListening) {
             recognition.stop();
             setIsListening(false);
+            setIsCapturingVoice(false);
             if (isVoiceMode) await speak("Stopped listening.");
         } else {
             if (isVoiceMode) {
@@ -210,9 +211,10 @@ const Messages = () => {
 
                 setInputText(newText);
                 setIsListening(false);
+                setIsCapturingVoice(false);
 
                 if (isVoiceMode) {
-                    speak(`Your message is: ${newText}. Press Enter or say send to send it.`);
+                    speak(`Your message is: ${newText}. Press Enter or say send to send it, or say remove to delete the message.`);
                 } else if (annyangLib) {
                     annyangLib.start({ autoRestart: true, continuous: false });
                 }
@@ -230,6 +232,7 @@ const Messages = () => {
 
             recognition.onend = () => {
                 setIsListening(false);
+                setIsCapturingVoice(false);
                 if (annyangLib && !window.speechSynthesis.speaking) {
                     try {
                         annyangLib.start({ autoRestart: true, continuous: false });
@@ -241,8 +244,10 @@ const Messages = () => {
                 try {
                     recognition.start();
                     setIsListening(true);
+                    setIsCapturingVoice(true);
                 } catch (e) {
                     setIsListening(false);
+                    setIsCapturingVoice(false);
                     if (annyangLib) annyangLib.start({ autoRestart: true, continuous: false });
                 }
             }, 600);
@@ -288,10 +293,13 @@ const Messages = () => {
 
         const handleVoiceCommand = (e: any) => {
             const detail = e.detail;
-            if (!detail || typeof detail !== 'object') return;
+            if (!detail) return;
 
-            if (detail.action === 'select' || detail.action === 'try-select') {
-                const name = detail.name as string;
+            // Handle both object and string detail formats
+            const action = typeof detail === 'object' ? detail.action : detail;
+            const name = typeof detail === 'object' ? detail.name : null;
+
+            if (action === 'select' || action === 'try-select') {
                 if (!name) return;
 
                 const lowerName = name.toLowerCase();
@@ -318,7 +326,7 @@ const Messages = () => {
 
                 if (matched) {
                     setActiveContact(matched);
-                    speak(`Selected chat with ${matched.name}${matched.jobTitle ? ` for the ${matched.jobTitle} role` : ''}. Press Control and Space together to start dictating, or say read messages to hear history.`);
+                    speak(`Selected chat with ${matched.name}${matched.jobTitle ? ` for the ${matched.jobTitle} role` : ''}. If you want to go back to another chat please say select followed by name. Press Control and Space together to start dictating, or say read messages to hear history.`);
                 } else {
                     speak(`Could not find a conversation matching ${name}.`);
                 }
@@ -328,10 +336,10 @@ const Messages = () => {
                 } else {
                     speak("You haven't typed a message yet.");
                 }
-            } else if (detail.action === 'clear-message') {
+            } else if (action === 'clear-message' || action === 'remove') {
                 setInputText('');
                 speak("Message cleared.");
-            } else if (detail.action === 'send') {
+            } else if (action === 'send') {
                 if (!stateRef.current.inputText.trim()) {
                     speak("You haven't typed a message yet. Press Control and Space to start.");
                 } else {
@@ -339,7 +347,7 @@ const Messages = () => {
                     handleSendRef.current();
                     speak(`Message sent: ${textToSend}`);
                 }
-            } else if (detail.action === 'read') {
+            } else if (action === 'read') {
                 const { activeContact: ac, messages: msgs } = stateRef.current;
                 if (!ac) {
                     speak("Please select a conversation first.");

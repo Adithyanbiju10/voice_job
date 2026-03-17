@@ -16,7 +16,9 @@ const JobCard = ({ job, index = 0, isActive = false }: JobCardProps) => {
 
   // Check if the employer who posted this job is verified
   const isVerifiedEmployer = registeredUsers.some(
-    (u: any) => u.role === 'employer' && u.name === job.company && u.isVerified === true
+    (u: any) => u.role === 'employer' && 
+    ((job.employer_email ? u.email === job.employer_email : u.name === job.company)) && 
+    u.isVerified === true
   );
   return (
     <Link to={`/jobs/${job.id}`} aria-label={`View ${job.title} at ${job.company}`}>
